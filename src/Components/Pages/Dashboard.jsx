@@ -92,7 +92,7 @@ export default function Dashboard() {
                 {/* Header Area */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-3xl font-bold bg-gradient-to-br from-gray-900 to-secondary text-transparent bg-clip-text">Dashboard Overview</h1>
+                        <h1 className="text-3xl font-bold bg-gradient-to-br fDashrom-gray-900 to-secondary text-transparent bg-clip-text">board Overview</h1>
                     </div>
                     <div className="flex gap-3">
                         <button className="px-4 py-2 bg-white border border-tertiary/60 text-secondary rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20">

@@ -52,6 +52,7 @@ export default function Banner() {
         tag_bg_color: '#ffffff26',
         btn_color: '#1e293b',
         btn_bg_color: '#ffffff',
+        isMainBanner: false,
         status: true
     });
 
@@ -173,7 +174,7 @@ export default function Banner() {
                     {banners.map((banner) => (
                         <div key={banner.id} className="group relative overflow-hidden rounded-2xl border border-tertiary/40 bg-white shadow-sm transition-all hover:shadow-lg hover:border-tertiary/60 flex flex-col">
                             {/* Banner Image */}
-                            <div className="relative h-40 w-full overflow-hidden bg-slate-100">
+                            <div className="relative h-28 w-full overflow-hidden bg-slate-100">
                                 <img
                                     src={banner.desktop_img_url}
                                     alt={banner.title}
@@ -294,7 +295,7 @@ export default function Banner() {
                                 </div>
                             ) : (
                                 <>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="grid grid-cols-1 gap-6">
                                         {/* Desktop Image Slot */}
                                         <div className="space-y-2">
                                             <label className="block text-sm font-semibold text-gray-900">
@@ -348,7 +349,7 @@ export default function Banner() {
                                         </div>
 
                                         {/* Mobile Image Slot */}
-                                        <div className="space-y-2">
+                                        {/* <div className="space-y-2">
                                             <label className="block text-sm font-semibold text-gray-900">
                                                 Mobile Banner Image
                                             </label>
@@ -397,7 +398,7 @@ export default function Banner() {
                                                 className="hidden"
                                                 onChange={handleMobileImageChange}
                                             />
-                                        </div>
+                                        </div> */}
                                     </div>
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
@@ -485,6 +486,25 @@ export default function Banner() {
                                         </div>
                                     )}
 
+                                    {/* Main Banner Toggle */}
+                                    <div className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+                                        <div>
+                                            <p className="text-sm font-bold text-gray-900">Set as Main Banner</p>
+                                            <p className="text-xs text-secondary/70 mt-0.5">This banner will appear as the primary hero banner on the homepage.</p>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
+                                            <input
+                                                type="checkbox"
+                                                name="isMainBanner"
+                                                className="sr-only peer"
+                                                checked={formData.isMainBanner}
+                                                onChange={handleChange}
+                                            />
+                                            <div className="h-6 w-11 rounded-full bg-slate-200 shadow-inner peer-focus:outline-none peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                        </label>
+                                    </div>
+
+                                    {/* Color Styling */}
                                     <div className="bg-slate-50 p-5 rounded-xl border border-tertiary/40 space-y-4">
                                         <h4 className="text-sm font-bold text-gray-900">Banner Colors Styling</h4>
                                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">

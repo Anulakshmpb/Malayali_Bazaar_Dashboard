@@ -30,13 +30,12 @@ export default function AdminSettings() {
     };
 
     return (
-        <div className='w-full min-h-screen bg-white pt-24 pb-12 page-container'>
+        <div className='min-h-screen bg-white pb-12 page-container'>
             <div className='max-w-7xl mx-auto'>
                 {/* Header Section */}
                 <div className='flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8'>
                     <div className='flex flex-col'>
-                        <h1 className='text-3xl font-bold bg-gradient-to-br from-primary to-secondary text-transparent bg-clip-text'>Admin Settings & Permissions</h1>
-                        <p className='text-secondary/80 mt-1 text-sm'>Configure role-based access control and system settings.</p>
+                        <h1 className='text-3xl font-bold bg-gradient-to-br from-gray-900 to-secondary text-transparent bg-clip-text'>Admin Settings & Permissions</h1>
                     </div>
                     <button
                         onClick={() => setAdminForm(true)}
@@ -65,10 +64,10 @@ export default function AdminSettings() {
                         <table className='w-full text-left border-collapse'>
                             <thead>
                                 <tr className='bg-tertiary/10 border-b border-tertiary/40'>
-                                    <th className='px-6 py-4 text-xs font-semibold text-primary uppercase tracking-wider'>Role / Designation</th>
-                                    <th className='px-6 py-4 text-xs font-semibold text-primary uppercase tracking-wider'>Access Level</th>
-                                    <th className='px-6 py-4 text-xs font-semibold text-primary uppercase tracking-wider'>Allowed Modules</th>
-                                    <th className='px-6 py-4 text-xs font-semibold text-primary uppercase tracking-wider text-right'>Actions</th>
+                                    <th className='px-6 py-4 text-xs font-bold text-secondary uppercase tracking-wider'>Role / Designation</th>
+                                    <th className='px-6 py-4 text-xs font-bold text-secondary uppercase tracking-wider'>Access Level</th>
+                                    <th className='px-6 py-4 text-xs font-bold text-secondary uppercase tracking-wider'>Allowed Modules</th>
+                                    <th className='px-6 py-4 text-xs font-bold text-secondary uppercase tracking-wider text-right'>Actions</th>
                                 </tr>
                             </thead>
                             <tbody className='divide-y divide-tertiary/30'>
@@ -97,20 +96,20 @@ export default function AdminSettings() {
                                             </div>
                                         </td>
                                         <td className='px-6 py-4 text-right'>
-                                            <div className='flex items-center justify-end gap-2 opacity-100 transition-opacity duration-200'>
+                                            <div className='flex items-center justify-end gap-2'>
                                                 <button
                                                     onClick={() => handleEdit(perm.id)}
-                                                    className='p-2 text-secondary hover:text-primary hover:bg-tertiary/20 rounded-lg transition-colors'
+                                                    className='p-1.5 bg-slate-50 hover:bg-slate-100 text-secondary rounded-md border border-tertiary/40 transition-colors'
                                                     title='Edit Permissions'
                                                 >
-                                                    <Edit2 size={18} />
+                                                    <Edit2 size={15} />
                                                 </button>
                                                 <button
                                                     onClick={() => handleDelete(perm.id)}
-                                                    className='p-2 text-red-800 hover:text-red-900 hover:bg-red-50 rounded-lg transition-colors'
+                                                    className='p-1.5 bg-rose-50/70 hover:bg-rose-100 text-rose-500 rounded-md border border-rose-200/60 transition-colors'
                                                     title='Delete Role'
                                                 >
-                                                    <Trash2 size={18} />
+                                                    <Trash2 size={15} />
                                                 </button>
                                             </div>
                                         </td>
@@ -151,7 +150,7 @@ export default function AdminSettings() {
 
                                     {/* Role Name */}
                                     <div>
-                                        <label className='block text-xs font-semibold text-primary uppercase tracking-wider mb-2'>Role Designation</label>
+                                        <label className='block text-sm font-semibold text-gray-900 mb-1.5'>Role Designation</label>
                                         <input
                                             type="text"
                                             placeholder='e.g., Support Staff, Content Editor'
@@ -165,8 +164,8 @@ export default function AdminSettings() {
                                     {/* Permissions Grid */}
                                     <div>
                                         <div className='flex items-center justify-between mb-4'>
-                                            <label className='block text-xs font-semibold text-primary uppercase tracking-wider'>Module Access Permissions</label>
-                                            <span className='text-xs text-secondary'>Select areas this role can access</span>
+                                            <label className='block text-sm font-semibold text-gray-900'>Module Access Permissions</label>
+                                            <span className='text-xs text-secondary/70 font-medium'>Select areas this role can access</span>
                                         </div>
 
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -181,7 +180,7 @@ export default function AdminSettings() {
                                                         />
                                                     </div>
                                                     <div className="flex flex-col">
-                                                        <label htmlFor={`module-${index}`} className="text-sm font-medium text-primary cursor-pointer">
+                                                        <label htmlFor={`module-${index}`} className="text-sm font-semibold text-gray-900 cursor-pointer">
                                                             {module}
                                                         </label>
                                                         {/* <div className="flex gap-4 mt-2">
@@ -208,14 +207,14 @@ export default function AdminSettings() {
                                 <button
                                     type='button'
                                     onClick={() => setAdminForm(false)}
-                                    className='px-5 py-2.5 text-sm font-medium text-secondary hover:text-primary hover:bg-tertiary/20 rounded-xl transition-all'
+                                    className='rounded-lg px-4 py-2.5 text-sm font-bold text-gray-900 transition hover:bg-slate-200'
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     form="permissionForm"
                                     type='submit'
-                                    className='px-5 py-2.5 text-sm font-medium bg-primary hover:bg-secondary text-white rounded-xl transition-all shadow-md hover:shadow-lg'
+                                    className='flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-secondary hover:shadow-lg hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-primary/20 active:scale-95'
                                 >
                                     Save Permissions
                                 </button>

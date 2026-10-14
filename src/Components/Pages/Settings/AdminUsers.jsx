@@ -18,15 +18,14 @@ export default function AdminUsers() {
     };
 
     return (
-        <div className='w-full min-h-screen bg-white pt-24 pb-12 page-container'>
+        <div className='min-h-screen bg-white pb-12 page-container'>
             <div className='max-w-7xl mx-auto'>
                 {/* Header Section */}
                 <div className='flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8'>
                     <div className='flex flex-col'>
-                        <h1 className='text-3xl font-bold bg-gradient-to-br from-primary to-secondary text-transparent bg-clip-text'>Admin Users</h1>
-                        <p className='text-secondary/80 mt-1 text-sm'>Manage system administrators and their roles</p>
+                        <h1 className='text-3xl font-bold bg-gradient-to-br from-gray-900 to-secondary text-transparent bg-clip-text'>Admin Users</h1>
                     </div>
-                    <button 
+                    <button
                         onClick={() => setAdminForm(true)}
                         className='flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-secondary text-white rounded-xl transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5'
                     >
@@ -39,10 +38,10 @@ export default function AdminUsers() {
                 <div className='bg-white p-4 rounded-2xl shadow-sm border border-tertiary/40 mb-6 flex items-center justify-between'>
                     <div className='relative w-full max-w-md'>
                         <Search className='absolute left-3.5 top-1/2 -translate-y-1/2 text-secondary/50' size={18} />
-                        <input 
-                            type="text" 
-                            placeholder='Search administrators...' 
-                            className='w-full pl-10 pr-4 py-2.5 bg-slate-50/50 border border-tertiary/60 rounded-xl text-primary text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all' 
+                        <input
+                            type="text"
+                            placeholder='Search administrators...'
+                            className='w-full pl-10 pr-4 py-2.5 bg-slate-50/50 border border-tertiary/60 rounded-xl text-primary text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all'
                         />
                     </div>
                 </div>
@@ -53,10 +52,10 @@ export default function AdminUsers() {
                         <table className='w-full text-left border-collapse'>
                             <thead>
                                 <tr className='bg-tertiary/10 border-b border-tertiary/40'>
-                                    <th className='px-6 py-4 text-xs font-semibold text-primary uppercase tracking-wider'>Admin Details</th>
-                                    <th className='px-6 py-4 text-xs font-semibold text-primary uppercase tracking-wider'>Contact</th>
-                                    <th className='px-6 py-4 text-xs font-semibold text-primary uppercase tracking-wider'>Role</th>
-                                    <th className='px-6 py-4 text-xs font-semibold text-primary uppercase tracking-wider text-right'>Actions</th>
+                                    <th className='px-6 py-4 text-xs font-bold text-secondary uppercase tracking-wider'>Admin Details</th>
+                                    <th className='px-6 py-4 text-xs font-bold text-secondary uppercase tracking-wider'>Contact</th>
+                                    <th className='px-6 py-4 text-xs font-bold text-secondary uppercase tracking-wider'>Role</th>
+                                    <th className='px-6 py-4 text-xs font-bold text-secondary uppercase tracking-wider text-right'>Actions</th>
                                 </tr>
                             </thead>
                             <tbody className='divide-y divide-tertiary/30'>
@@ -86,20 +85,20 @@ export default function AdminUsers() {
                                             </span>
                                         </td>
                                         <td className='px-6 py-4 text-right'>
-                                            <div className='flex items-center justify-end gap-2 opacity-100 transition-opacity duration-200'>
-                                                <button 
+                                            <div className='flex items-center justify-end gap-2'>
+                                                <button
                                                     onClick={() => handleEdit(admin.id)}
-                                                    className='p-2 text-secondary hover:text-primary hover:bg-tertiary/20 rounded-lg transition-colors'
+                                                    className='p-1.5 bg-slate-50 hover:bg-slate-100 text-secondary rounded-md border border-tertiary/40 transition-colors'
                                                     title='Edit Admin'
                                                 >
-                                                    <Edit2 size={18} />
+                                                    <Edit2 size={15} />
                                                 </button>
-                                                <button 
+                                                <button
                                                     onClick={() => handleDelete(admin.id)}
-                                                    className='p-2 text-red-800 hover:text-red-900 hover:bg-red-50 rounded-lg transition-colors'
+                                                    className='p-1.5 bg-rose-50/70 hover:bg-rose-100 text-rose-500 rounded-md border border-rose-200/60 transition-colors'
                                                     title='Delete Admin'
                                                 >
-                                                    <Trash2 size={18} />
+                                                    <Trash2 size={15} />
                                                 </button>
                                             </div>
                                         </td>
@@ -123,22 +122,22 @@ export default function AdminUsers() {
                         <div className='bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-[slideUp_0.3s_ease-out]'>
                             <div className='px-6 py-4 border-b border-tertiary/40 flex items-center justify-between bg-tertiary/5'>
                                 <h2 className='text-lg font-bold text-primary'>Add New Admin</h2>
-                                <button 
+                                <button
                                     onClick={() => setAdminForm(false)}
                                     className='p-2 text-secondary hover:text-primary hover:bg-tertiary/20 rounded-full transition-colors'
                                 >
                                     <X size={20} />
                                 </button>
                             </div>
-                            
+
                             <form className='p-6 space-y-5' onSubmit={(e) => { e.preventDefault(); setAdminForm(false); }}>
                                 <div className='grid grid-cols-1 sm:grid-cols-2 gap-5'>
                                     <div>
-                                        <label className='block text-xs font-semibold text-primary uppercase tracking-wider mb-1.5'>Full Name</label>
+                                        <label className='block text-sm font-semibold text-gray-900 mb-1.5'>Full Name</label>
                                         <input type="text" placeholder='John Doe' className='w-full px-4 py-2.5 bg-slate-50 border border-tertiary/80 rounded-xl text-primary text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all' required />
                                     </div>
                                     <div>
-                                        <label className='block text-xs font-semibold text-primary uppercase tracking-wider mb-1.5'>Role</label>
+                                        <label className='block text-sm font-semibold text-gray-900 mb-1.5'>Role</label>
                                         <select className='w-full px-4 py-2.5 bg-slate-50 border border-tertiary/80 rounded-xl text-primary text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all'>
                                             <option>Super Admin</option>
                                             <option>Manager Admin</option>
@@ -146,39 +145,39 @@ export default function AdminUsers() {
                                         </select>
                                     </div>
                                 </div>
-                                
+
                                 <div>
-                                    <label className='block text-xs font-semibold text-primary uppercase tracking-wider mb-1.5'>Email Address</label>
+                                    <label className='block text-sm font-semibold text-gray-900 mb-1.5'>Email Address</label>
                                     <input type="email" placeholder='admin@example.com' className='w-full px-4 py-2.5 bg-slate-50 border border-tertiary/80 rounded-xl text-primary text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all' required />
                                 </div>
 
                                 <div>
-                                    <label className='block text-xs font-semibold text-primary uppercase tracking-wider mb-1.5'>Phone Number</label>
+                                    <label className='block text-sm font-semibold text-gray-900 mb-1.5'>Phone Number</label>
                                     <input type="tel" placeholder='+1 (555) 000-0000' className='w-full px-4 py-2.5 bg-slate-50 border border-tertiary/80 rounded-xl text-primary text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all' required />
                                 </div>
 
                                 <div className='grid grid-cols-1 sm:grid-cols-2 gap-5'>
                                     <div>
-                                        <label className='block text-xs font-semibold text-primary uppercase tracking-wider mb-1.5'>Password</label>
+                                        <label className='block text-sm font-semibold text-gray-900 mb-1.5'>Password</label>
                                         <input type="password" placeholder='••••••••' className='w-full px-4 py-2.5 bg-slate-50 border border-tertiary/80 rounded-xl text-primary text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all' required />
                                     </div>
                                     <div>
-                                        <label className='block text-xs font-semibold text-primary uppercase tracking-wider mb-1.5'>Confirm Password</label>
+                                        <label className='block text-sm font-semibold text-gray-900 mb-1.5'>Confirm Password</label>
                                         <input type="password" placeholder='••••••••' className='w-full px-4 py-2.5 bg-slate-50 border border-tertiary/80 rounded-xl text-primary text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all' required />
                                     </div>
                                 </div>
 
-                                <div className='pt-2 flex items-center justify-end gap-3 border-t border-tertiary/30 mt-6 pt-5'>
-                                    <button 
-                                        type='button' 
+                                <div className='flex items-center justify-end gap-3 border-t border-tertiary/30 mt-6 pt-5'>
+                                    <button
+                                        type='button'
                                         onClick={() => setAdminForm(false)}
-                                        className='px-5 py-2.5 text-sm font-medium text-secondary hover:text-primary hover:bg-tertiary/20 rounded-xl transition-all'
+                                        className='rounded-lg px-4 py-2.5 text-sm font-bold text-gray-900 transition hover:bg-slate-200'
                                     >
                                         Cancel
                                     </button>
-                                    <button 
-                                        type='submit' 
-                                        className='px-5 py-2.5 text-sm font-medium bg-primary hover:bg-secondary text-white rounded-xl transition-all shadow-md hover:shadow-lg'
+                                    <button
+                                        type='submit'
+                                        className='flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-secondary hover:shadow-lg hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-primary/20 active:scale-95'
                                     >
                                         Create Admin
                                     </button>
