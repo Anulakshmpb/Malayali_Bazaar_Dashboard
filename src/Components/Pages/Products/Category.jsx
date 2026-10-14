@@ -11,6 +11,19 @@ import {
 
 export default function Category() {
     const [isModalOpen, setIsModalOpen] = useState(false);
+
+    // Sub category inputs inside the modal (multiple)
+    const [subCategoryInputs, setSubCategoryInputs] = useState(['']);
+
+    const addSubCategoryInput = () => setSubCategoryInputs([...subCategoryInputs, '']);
+
+    const updateSubCategoryInput = (index, value) => {
+        setSubCategoryInputs(subCategoryInputs.map((s, i) => (i === index ? value : s)));
+    };
+
+    const removeSubCategoryInput = (index) => {
+        setSubCategoryInputs(subCategoryInputs.filter((_, i) => i !== index));
+    };
     
     const [categories, setCategories] = useState([
         { 
@@ -18,28 +31,32 @@ export default function Category() {
             name: "Coffee", 
             image: "https://images.unsplash.com/photo-1559525839-b184a4d698c7?auto=format&fit=crop&w=600&h=400",
             isVisible: true,
-            itemCount: 24
+            itemCount: 24,
+            subCategories: ["Coffee Beans", "Ground Coffee", "Instant Coffee"]
         },
         { 
             id: 2, 
             name: "Tea", 
             image: "https://images.unsplash.com/photo-1589363460779-fd4be9b64b38?auto=format&fit=crop&w=600&h=400",
             isVisible: true,
-            itemCount: 18
+            itemCount: 18,
+            subCategories: ["Green Tea", "Black Tea"]
         },
         { 
             id: 3, 
             name: "Accessories", 
             image: "https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?auto=format&fit=crop&w=600&h=400",
             isVisible: false,
-            itemCount: 32
+            itemCount: 32,
+            subCategories: ["Mugs", "Filters", "Grinders", "Aprons", "Cups"]
         },
         { 
             id: 4, 
             name: "Syrups & Flavors", 
             image: "https://images.unsplash.com/photo-1527661591475-527312dd65f5?auto=format&fit=crop&w=600&h=400",
             isVisible: true,
-            itemCount: 12
+            itemCount: 12,
+            subCategories: ["Vanilla", "Caramel"]
         }
     ]);
 
@@ -163,6 +180,33 @@ export default function Category() {
                                         <div className="h-6 w-11 rounded-full bg-slate-200 shadow-inner peer-focus:outline-none peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                                     </label>
                                 </div>
+
+                                {/* Sub Categories */}
+                                {category.subCategories?.length > 0 && (
+                                    <div className="mt-4 pt-4 border-t border-tertiary/20">
+                                        <p className="text-xs font-bold text-secondary/70 mb-2">
+                                            Sub Categories ({category.subCategories.length})
+                                        </p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {category.subCategories.slice(0, 3).map((sub, i) => (
+                                                <span
+                                                    key={i}
+                                                    className="inline-flex items-center rounded-md border border-tertiary/60 bg-slate-50 px-2 py-0.5 text-xs font-medium text-gray-900"
+                                                >
+                                                    {sub}
+                                                </span>
+                                            ))}
+                                            {category.subCategories.length > 3 && (
+                                                <span
+                                                    className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-gray-900"
+                                                    title={category.subCategories.slice(3).join(', ')}
+                                                >
+                                                    +{category.subCategories.length - 3} more
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))}
@@ -211,6 +255,43 @@ export default function Category() {
                                     <p className="mt-1 text-xs text-secondary/70">JPG, PNG or WEBP (Max 2MB)</p>
                                     <input type="file" className="sr-only" accept="image/*" />
                                 </label>
+                            </div>
+                             <div>
+                                <div className="mb-1.5 flex items-center justify-between">
+                                    <label className="block text-sm font-semibold text-gray-900">
+                                        Sub Categories <span className="text-rose-500">*</span>
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={addSubCategoryInput}
+                                        className="flex items-center gap-1 text-xs font-semibold text-gray-900 hover:underline"
+                                    >
+                                        <Plus size={14} />
+                                        Add Sub Category
+                                    </button>
+                                </div>
+                                <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
+                                    {subCategoryInputs.map((value, index) => (
+                                        <div key={index} className="flex items-center gap-2">
+                                            <input 
+                                                type="text" 
+                                                placeholder="e.g. Coffee Beans" 
+                                                value={value}
+                                                onChange={(e) => updateSubCategoryInput(index, e.target.value)}
+                                                className="w-full rounded-lg border border-tertiary/60 bg-slate-50 px-4 py-2.5 text-sm font-medium text-gray-900 outline-none transition placeholder:text-secondary/50 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => removeSubCategoryInput(index)}
+                                                disabled={subCategoryInputs.length === 1}
+                                                className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-rose-500 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-30"
+                                                title="Remove sub category"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
 

@@ -7,11 +7,15 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^13.5.0",
+    "firebase": "^13.0.0",
     "lucide-react": "^1.52.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "react-icons": "^5.7.0",
+    "react-is": "^19.3.0",
     "react-router-dom": "^7.18.4",
     "react-scripts": "5.0.1",
+    "recharts": "^3.10.1",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
@@ -22,9 +26,11 @@
   },
   "eslintConfig": {
     "extends": [
-      "react-app",
-      "react-app/jest"
+      "react-app"
     ]
+  },
+  "overrides": {
+    "eslint-plugin-jest": "^25.3.0"
   },
   "browserslist": {
     "production": [

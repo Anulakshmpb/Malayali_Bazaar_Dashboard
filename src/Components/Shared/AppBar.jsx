@@ -113,29 +113,42 @@ function AppBar({ children }) {
           path: "/users",
           icon: Users,
         },
-
-        {
-          name: "Policy",
+         {
+          name: "Customer Ledger",
+          path: "/customer-ledger",
+          icon: Layers,
+        },
+         {
+          name: "Website Management",
           icon: FileText,
           subItems: [
             {
-              name: "Shipping Policy",
-              path: "/policy/shipping",
+              name: "Footer",
+              path: "/footer",
               icon: Truck,
             },
             {
               name: "Privacy Policy",
-              path: "/policy/privacy",
+              path: "/privacy",
               icon: ShieldCheck,
             },
             {
               name: "Term & Conditions",
-              path: "/policy/terms",
+              path: "/terms",
+              icon: FileCheck,
+            },
+            {
+              name: "Shipping Policy",
+              path: "/shipping",
+              icon: FileCheck,
+            },
+              {
+              name: "Common Section",
+              path: "/common-section",
               icon: FileCheck,
             },
           ],
         },
-
         {
           name: "Settings",
           icon: Settings,

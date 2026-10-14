@@ -15,9 +15,11 @@ import {
 export default function AddProduct() {
     const navigate = useNavigate();
 
-    const [variants, setVariants] = useState([
-        { quantity: '', unit: 'g', price: '', stock: '' },
-    ]);
+    const [stockInfo, setStockInfo] = useState({ quantity: '', unit: 'g', stock: '' });
+    const [pricing, setPricing] = useState({ mrp: '', offerPrice: '', specialPrice: '' });
+
+    const updateStockInfo = (field, value) => setStockInfo(prev => ({ ...prev, [field]: value }));
+    const updatePricing = (field, value) => setPricing(prev => ({ ...prev, [field]: value }));
 
     const [thumbnail, setThumbnail] = useState(null);
     const [gallery, setGallery] = useState([]);
@@ -29,82 +31,32 @@ export default function AddProduct() {
     );
 
     useEffect(() => {
-        return () => {
-            if (thumbnailPreview) {
-                URL.revokeObjectURL(thumbnailPreview);
-            }
-        };
+        return () => { if (thumbnailPreview) URL.revokeObjectURL(thumbnailPreview); };
     }, [thumbnailPreview]);
 
     // Create gallery preview URLs and clean them up
     useEffect(() => {
-        const previews = gallery.map((file) => ({
-            file,
-            url: URL.createObjectURL(file),
-        }));
-
+        const previews = gallery.map((file) => ({ file, url: URL.createObjectURL(file) }));
         setGalleryPreviews(previews);
-
-        return () => {
-            previews.forEach(({ url }) => URL.revokeObjectURL(url));
-        };
+        return () => { previews.forEach(({ url }) => URL.revokeObjectURL(url)); };
     }, [gallery]);
 
     const [galleryPreviews, setGalleryPreviews] = useState([]);
 
     const handleThumbnailChange = (event) => {
         const file = event.target.files?.[0];
-
-        if (file) {
-            setThumbnail(file);
-        }
-
-        // Allows selecting the same file again
+        if (file) setThumbnail(file);
         event.target.value = '';
     };
 
     const handleGalleryChange = (event) => {
         const files = Array.from(event.target.files || []);
-        const imageFiles = files.filter((file) =>
-            file.type.startsWith('image/')
-        );
-
-        setGallery((previous) => [...previous, ...imageFiles]);
+        setGallery(prev => [...prev, ...files.filter(f => f.type.startsWith('image/'))]);
         event.target.value = '';
     };
 
-    const removeThumbnail = () => {
-        setThumbnail(null);
-    };
-
-    const removeGalleryImage = (index) => {
-        setGallery((previous) =>
-            previous.filter((_, i) => i !== index)
-        );
-    };
-
-    const addVariant = () => {
-        setVariants((previous) => [
-            ...previous,
-            { quantity: '', unit: 'g', price: '', stock: '' },
-        ]);
-    };
-
-    const removeVariant = (index) => {
-        setVariants((previous) =>
-            previous.filter((_, i) => i !== index)
-        );
-    };
-
-    const updateVariant = (index, field, value) => {
-        setVariants((previous) =>
-            previous.map((variant, i) =>
-                i === index
-                    ? { ...variant, [field]: value }
-                    : variant
-            )
-        );
-    };
+    const removeThumbnail = () => setThumbnail(null);
+    const removeGalleryImage = (index) => setGallery(prev => prev.filter((_, i) => i !== index));
 
     const inputClass =
         'w-full rounded-lg border border-tertiary/60 bg-slate-50/70 px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-secondary/50 hover:bg-white focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10';
@@ -275,7 +227,7 @@ export default function AddProduct() {
                             'General Information',
                         )}
 
-                        <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
                             <TextField
                                 id="productName"
                                 label="Product Name"
@@ -286,18 +238,27 @@ export default function AddProduct() {
                             <TextField
                                 id="productSKU"
                                 label="Product SKU"
-                                placeholder="e.g. PRD-001"
+                                placeholder="20"
                             />
 
-                            <TextField
+                            <SelectField
                                 id="productType"
                                 label="Product Type"
-                                placeholder="Enter product type"
+                                options={[
+                                    { value: 'general', label: 'General' },
+                                ]}
                             />
 
                             <SelectField
                                 id="productCategory"
                                 label="Category"
+                                options={[
+                                    { value: 'general', label: 'General' },
+                                ]}
+                            />
+                            <SelectField
+                                id="productSubCategory"
+                                label="Sub Category"
                                 options={[
                                     { value: 'general', label: 'General' },
                                 ]}
@@ -317,10 +278,10 @@ export default function AddProduct() {
                                 placeholder="Product names or IDs"
                             />
 
-                            
+
                         </div>
 
-                        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-4">
+                        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-5">
                             <div className="sm:col-span-2 lg:col-span-2">
                                 <label
                                     htmlFor="productDescription"
@@ -348,149 +309,91 @@ export default function AddProduct() {
                                 label="Tax Applicable"
                                 description="Apply tax to product variants."
                             />
+                            <Toggle
+                                id="productVisible"
+                                label="Product Visibility"
+                                description="Show this Product on Home Page."
+                            />
                         </div>
                     </section>
 
                     {/* Product Media */}
                     <section className={sectionClass}>
-                        {heading(
-                            ImagePlus,
-                            'Product Media',
-                        )}
+                        {heading(ImagePlus, 'Product Media')}
 
-                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:items-stretch">
 
                             {/* Primary Thumbnail */}
-                            <div className="min-w-0">
-                                <label
-                                    htmlFor="productImage"
-                                    className={labelClass}
-                                >
+                            <div className="flex flex-col min-w-0">
+                                <label htmlFor="productImage" className={labelClass}>
                                     Primary Thumbnail
                                 </label>
+                                <input type="file" id="productImage" name="productImage" accept="image/*" onChange={handleThumbnailChange} className="sr-only" />
 
-                                <input
-                                    type="file"
-                                    id="productImage"
-                                    name="productImage"
-                                    accept="image/*"
-                                    onChange={handleThumbnailChange}
-                                    className="sr-only"
-                                />
-
-                                {thumbnailPreview ? (
-                                    <div className="relative flex min-h-40 items-center justify-center overflow-hidden rounded-xl border border-tertiary/40 bg-slate-50 p-2">
-                                        <img
-                                            src={thumbnailPreview}
-                                            alt="Primary product preview"
-                                            className="max-h-52 w-full rounded-lg object-contain"
-                                        />
-
-                                        <button
-                                            type="button"
-                                            onClick={removeThumbnail}
-                                            aria-label="Remove thumbnail"
-                                            className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg bg-white text-rose-600 shadow-md transition hover:bg-rose-50"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-
-                                        <label
-                                            htmlFor="productImage"
-                                            className="absolute bottom-3 left-3 cursor-pointer rounded-lg bg-white/95 px-3 py-1.5 text-xs font-semibold text-gray-800 shadow hover:bg-white"
-                                        >
-                                            Change image
-                                        </label>
-                                    </div>
-                                ) : (
-                                    <label
-                                        htmlFor="productImage"
-                                        className="group flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-tertiary/60 bg-slate-50/70 p-4 text-center transition hover:border-primary/60 hover:bg-primary/[0.03]"
-                                    >
-                                        <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary transition group-hover:scale-105">
-                                            <Upload size={20} />
+                                <div className="flex-1 rounded-xl border border-tertiary/40 bg-slate-50/50 overflow-hidden">
+                                    {thumbnailPreview ? (
+                                        <div className="relative flex h-full min-h-[160px] items-center justify-center p-2">
+                                            <img src={thumbnailPreview} alt="Primary product preview" className="max-h-40 w-full rounded-lg object-contain" />
+                                            <button type="button" onClick={removeThumbnail} aria-label="Remove thumbnail"
+                                                className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-lg bg-white text-rose-500 shadow-sm transition hover:bg-rose-50 border border-rose-100">
+                                                <Trash2 size={13} />
+                                            </button>
+                                            <label htmlFor="productImage" className="absolute bottom-2 left-2 cursor-pointer rounded-md bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-gray-800 shadow-sm hover:bg-white border border-tertiary/30 transition">
+                                                Change
+                                            </label>
                                         </div>
-
-                                        <p className="text-sm font-bold text-gray-900">
-                                            Upload thumbnail
-                                        </p>
-
-                                        <p className="mt-1 text-xs text-secondary/70">
-                                            PNG, JPG or WEBP
-                                        </p>
-                                    </label>
-                                )}
+                                    ) : (
+                                        <label htmlFor="productImage" className="group flex h-full min-h-[160px] cursor-pointer flex-col items-center justify-center p-4 text-center transition hover:bg-primary/[0.03]">
+                                            <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary transition group-hover:scale-105">
+                                                <Upload size={20} />
+                                            </div>
+                                            <p className="text-xs font-bold text-gray-900">Click to upload</p>
+                                            <p className="mt-0.5 text-[11px] text-secondary/60">PNG, JPG or WEBP</p>
+                                        </label>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Product Gallery */}
-                            <div className="min-w-0">
+                            <div className="flex flex-col min-w-0">
                                 <label className={labelClass}>
                                     Product Gallery
-                                    <span className="ml-2 text-xs font-normal text-secondary/70">
-                                        ({gallery.length} images)
-                                    </span>
+                                    <span className="ml-1.5 text-xs font-normal text-secondary/70">({gallery.length})</span>
                                 </label>
+                                <input type="file" id="productGallery" name="productGallery" accept="image/*" multiple onChange={handleGalleryChange} className="sr-only" />
 
-                                <input
-                                    type="file"
-                                    id="productGallery"
-                                    name="productGallery"
-                                    accept="image/*"
-                                    multiple
-                                    onChange={handleGalleryChange}
-                                    className="sr-only"
-                                />
-
-                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                                    {galleryPreviews.map(
-                                        ({ file, url }, index) => (
-                                            <div
-                                                key={`${file.name}-${file.lastModified}-${index}`}
-                                                className="group relative aspect-square overflow-hidden rounded-xl border border-tertiary/40 bg-slate-50"
-                                            >
-                                                <img
-                                                    src={url}
-                                                    alt={`Gallery image ${index + 1}`}
-                                                    className="h-full w-full object-cover"
-                                                />
-
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        removeGalleryImage(index)
-                                                    }
-                                                    aria-label={`Remove gallery image ${index + 1}`}
-                                                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-lg bg-white/95 text-rose-600 shadow transition hover:bg-rose-50"
-                                                >
-                                                    <Trash2 size={14} />
-                                                </button>
+                                <div className="flex-1 rounded-xl border border-tertiary/40 bg-slate-50/50 overflow-hidden">
+                                    <div className="h-full min-h-[160px] p-2 overflow-y-auto">
+                                        {gallery.length === 0 ? (
+                                            <label htmlFor="productGallery" className="group flex h-full min-h-[148px] cursor-pointer flex-col items-center justify-center p-4 text-center transition hover:bg-primary/[0.03]">
+                                                <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary transition group-hover:scale-105">
+                                                    <Plus size={20} />
+                                                </div>
+                                                <p className="text-xs font-bold text-gray-900">Add gallery images</p>
+                                                <p className="mt-0.5 text-[11px] text-secondary/60">Select multiple files</p>
+                                            </label>
+                                        ) : (
+                                            <div className="grid grid-cols-4 gap-2">
+                                                {galleryPreviews.map(({ file, url }, index) => (
+                                                    <div key={`${file.name}-${file.lastModified}-${index}`} className="group relative aspect-square overflow-hidden rounded-lg border border-tertiary/40 bg-slate-100">
+                                                        <img src={url} alt={`Gallery ${index + 1}`} className="h-full w-full object-cover transition group-hover:scale-105 duration-300" />
+                                                        <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
+                                                        <button type="button" onClick={() => removeGalleryImage(index)} aria-label={`Remove gallery image ${index + 1}`}
+                                                            className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-md bg-white/95 text-rose-500 shadow-sm transition hover:bg-rose-50 opacity-0 group-hover:opacity-100">
+                                                            <Trash2 size={11} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                                <label htmlFor="productGallery" className="group flex aspect-square cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-tertiary/50 bg-white/60 transition hover:border-primary/50 hover:bg-primary/[0.03]">
+                                                    <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary transition group-hover:scale-105">
+                                                        <Plus size={15} />
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-gray-700 mt-1">Add</span>
+                                                </label>
                                             </div>
-                                        )
-                                    )}
-
-                                    <label
-                                        htmlFor="productGallery"
-                                        className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-tertiary/60 bg-slate-50/70 p-3 text-center transition hover:border-primary/60 hover:bg-primary/[0.03]"
-                                    >
-                                        <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                                            <Plus size={20} />
-                                        </div>
-
-                                        <span className="text-xs font-bold text-gray-900">
-                                            Add images
-                                        </span>
-
-                                        <span className="mt-1 text-[11px] text-secondary/70">
-                                            Select multiple
-                                        </span>
-                                    </label>
+                                        )}
+                                    </div>
                                 </div>
-
-                                {gallery.length === 0 && (
-                                    <p className="mt-2 text-xs text-secondary/70">
-                                        Your selected gallery images will appear here.
-                                    </p>
-                                )}
                             </div>
                         </div>
                     </section>
@@ -523,71 +426,42 @@ export default function AddProduct() {
                         </div>
                     </section>
 
-                    {/* Pricing & Variants */}
+                    {/* Pricing & Stock */}
                     <section className={sectionClass}>
-                        {heading(
-                            DollarSign,
-                            'Pricing & Variants',
-                        )}
+                        {heading(DollarSign, 'Pricing & Stock')}
 
-                        <div className="space-y-3">
-                            {variants.map((variant, index) => (
-                                <div
-                                    key={index}
-                                    className="grid grid-cols-1 items-end gap-3 rounded-xl border border-tertiary/40 bg-slate-50/50 p-3 sm:grid-cols-[1fr_1fr_1fr_auto]"
-                                >
+                        <div className="space-y-5">
+
+                            {/* Stock Info */}
+                            <div>
+                                <p className="mb-3 text-xs font-bold uppercase tracking-widest text-secondary/60">Stock Info</p>
+                                <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-3">
+
                                     {/* Quantity */}
                                     <div className="min-w-0">
-                                        <label
-                                            htmlFor={`quantity-${index}`}
-                                            className={labelClass}
-                                        >
-                                            Quantity
-                                            <span className="ml-1 text-rose-500">*</span>
+                                        <label htmlFor="quantity" className={labelClass}>
+                                            Quantity <span className="text-rose-500">*</span>
                                         </label>
-
                                         <input
-                                            type="number"
-                                            id={`quantity-${index}`}
-                                            value={variant.quantity}
-                                            onChange={(e) =>
-                                                updateVariant(
-                                                    index,
-                                                    'quantity',
-                                                    e.target.value
-                                                )
-                                            }
-                                            placeholder="e.g. 500"
-                                            className={inputClass}
-                                            required
-                                            min="0"
-                                            step="any"
+                                            type="number" id="quantity" name="quantity"
+                                            value={stockInfo.quantity}
+                                            onChange={(e) => updateStockInfo('quantity', e.target.value)}
+                                            placeholder="e.g. 500" className={inputClass}
+                                            required min="0" step="any"
                                         />
                                     </div>
 
                                     {/* Unit */}
                                     <div className="min-w-0">
-                                        <label
-                                            htmlFor={`unit-${index}`}
-                                            className={labelClass}
-                                        >
-                                            Unit
-                                            <span className="ml-1 text-rose-500">*</span>
+                                        <label htmlFor="unit" className={labelClass}>
+                                            Unit <span className="text-rose-500">*</span>
                                         </label>
-
                                         <div className="relative">
                                             <select
-                                                id={`unit-${index}`}
-                                                value={variant.unit}
-                                                onChange={(e) =>
-                                                    updateVariant(
-                                                        index,
-                                                        'unit',
-                                                        e.target.value
-                                                    )
-                                                }
-                                                className={`${inputClass} appearance-none pr-9`}
-                                                required
+                                                id="unit" name="unit"
+                                                value={stockInfo.unit}
+                                                onChange={(e) => updateStockInfo('unit', e.target.value)}
+                                                className={`${inputClass} appearance-none pr-9`} required
                                             >
                                                 <option value="piece">Piece</option>
                                                 <option value="kg">Kilogram (kg)</option>
@@ -598,114 +472,91 @@ export default function AddProduct() {
                                                 <option value="pack">Pack</option>
                                                 <option value="set">Set</option>
                                             </select>
-
-                                            <ChevronDown
-                                                size={15}
-                                                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-secondary/60"
-                                            />
+                                            <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-secondary/60" />
                                         </div>
                                     </div>
 
-                                    {/* Price */}
+                                    {/* Stock */}
                                     <div className="min-w-0">
-                                        <label
-                                            htmlFor={`price-${index}`}
-                                            className={labelClass}
-                                        >
-                                            Price (₹)
-                                            <span className="ml-1 text-rose-500">*</span>
+                                        <label htmlFor="stock" className={labelClass}>
+                                            Stock <span className="text-rose-500">*</span>
                                         </label>
-
-                                        <div className="relative">
-                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-secondary/70">
-                                                ₹
-                                            </span>
-
-                                            <input
-                                                type="number"
-                                                id={`price-${index}`}
-                                                min="0"
-                                                step="0.01"
-                                                value={variant.price}
-                                                onChange={(e) =>
-                                                    updateVariant(
-                                                        index,
-                                                        'price',
-                                                        e.target.value
-                                                    )
-                                                }
-                                                placeholder="0.00"
-                                                className={`${inputClass} pl-8`}
-                                                required
-                                            />
-                                        </div>
-                                    </div>
-                                     {/* Stock */}
-                                    <div className="min-w-0">
-                                        <label
-                                            htmlFor={`stock-${index}`}
-                                            className={labelClass}
-                                        >
-                                            Stock
-                                            <span className="ml-1 text-rose-500">*</span>
-                                        </label>
-
                                         <input
-                                            type="number"
-                                            id={`stock-${index}`}
-                                            value={variant.stock}
-                                            onChange={(e) =>
-                                                updateVariant(
-                                                    index,
-                                                    'stock',
-                                                    e.target.value
-                                                )
-                                            }
-                                            placeholder="0"
-                                            className={inputClass}
-                                            required
-                                            min="0"
-                                            step="any"
+                                            type="number" id="stock" name="stock"
+                                            value={stockInfo.stock}
+                                            onChange={(e) => updateStockInfo('stock', e.target.value)}
+                                            placeholder="e.g. 100" className={inputClass}
+                                            required min="0" step="any"
                                         />
                                     </div>
-
-                                    {/* Remove Variant */}
-                                    {variants.length > 1 ? (
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                removeVariant(index)
-                                            }
-                                            aria-label={`Remove variant ${index + 1}`}
-                                            className="flex h-10 w-full items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 transition hover:bg-rose-500 hover:text-white sm:w-10"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    ) : (
-                                        <div className="hidden sm:block sm:w-10" />
-                                    )}
                                 </div>
-                            ))}
+                            </div>
 
-                            <button
-                                type="button"
-                                onClick={addVariant}
-                                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-primary/40 px-4 py-2.5 text-sm font-bold text-primary transition hover:bg-primary/5 sm:w-auto"
-                            >
-                                <Plus size={16} />
-                                Add Another Variant
-                            </button>
+                            {/* Divider */}
+                            <div className="border-t border-tertiary/30" />
+
+                            {/* Pricing */}
+                            <div>
+                                <p className="mb-3 text-xs font-bold uppercase tracking-widest text-secondary/60">Pricing (₹)</p>
+                                <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-3">
+
+                                    {/* MRP */}
+                                    <div className="min-w-0">
+                                        <label htmlFor="mrp" className={labelClass}>
+                                            MRP <span className="text-rose-500">*</span>
+                                        </label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-secondary/70">₹</span>
+                                            <input
+                                                type="number" id="mrp" name="mrp"
+                                                value={pricing.mrp}
+                                                onChange={(e) => updatePricing('mrp', e.target.value)}
+                                                placeholder="0.00" className={`${inputClass} pl-8`}
+                                                required min="0" step="0.01"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Offer Price */}
+                                    <div className="min-w-0">
+                                        <label htmlFor="offerPrice" className={labelClass}>Offer Price</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-secondary/70">₹</span>
+                                            <input
+                                                type="number" id="offerPrice" name="offerPrice"
+                                                value={pricing.offerPrice}
+                                                onChange={(e) => updatePricing('offerPrice', e.target.value)}
+                                                placeholder="0.00" className={`${inputClass} pl-8`}
+                                                min="0" step="0.01"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Special Price */}
+                                    <div className="min-w-0">
+                                        <label htmlFor="specialPrice" className={labelClass}>Special Price</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-secondary/70">₹</span>
+                                            <input
+                                                type="number" id="specialPrice" name="specialPrice"
+                                                value={pricing.specialPrice}
+                                                onChange={(e) => updatePricing('specialPrice', e.target.value)}
+                                                placeholder="0.00" className={`${inputClass} pl-8`}
+                                                min="0" step="0.01"
+                                            />
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+
                         </div>
                     </section>
 
                     {/* Bottom Actions */}
                     <div className="sticky bottom-0 z-10 -mx-3 border-t border-tertiary/40 bg-white/95 px-3 py-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] backdrop-blur-md sm:-mx-5 sm:px-5 lg:-mx-6 lg:px-6">
                         <div className="mx-auto flex max-w-6xl flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <p className="hidden text-xs font-medium text-secondary/70 md:block">
-                                Fields marked with{' '}
-                                <span className="text-rose-500">*</span> are required.
-                            </p>
-
+                            
                             <div className="flex gap-2 sm:ml-auto">
                                 <button
                                     type="button"

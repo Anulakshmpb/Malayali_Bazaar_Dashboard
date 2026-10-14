@@ -17,6 +17,15 @@ import ViewSection from './Components/Pages/Section/ViewSection';
 import Banner from './Components/Pages/Banner/Banner';
 import User from './Components/Pages/Users/User';
 import ViewUser from './Components/Pages/Users/ViewUser';
+import Footer from './Components/Pages/SiteManagement/Footer';
+import PrivacyPolicy from './Components/Pages/SiteManagement/PrivacyPolicy';
+import TermsCondition from './Components/Pages/SiteManagement/TermsCondition';
+import ShippingPolicy from './Components/Pages/SiteManagement/Shipping';
+import Report from './Components/Pages/Reports/Report';
+import Analytics from './Components/Pages/Reports/Analytics';
+import UserLedger from './Components/Pages/UserLedger/UserLedger';
+import ViewLedger from './Components/Pages/UserLedger/ViewLedger';
+import CommonSection from './Components/Pages/SiteManagement/CommonSection';
 
 function App() {
   return (
@@ -47,7 +56,19 @@ function App() {
 
               <Route path='/users' element={<User />} />
               <Route path='/users/view' element={<ViewUser />} />
-              
+
+              <Route path='/footer' element={<Footer />} />
+              <Route path='/privacy' element={<PrivacyPolicy />} />
+              <Route path='/terms' element={<TermsCondition />} />
+              <Route path='/shipping' element={<ShippingPolicy />} />
+              <Route path='/common-section' element={<CommonSection />} />
+
+
+              <Route path='/reports' element={<Report />} />
+              <Route path='/analytics' element={<Analytics />} />
+
+              <Route path='/customer-ledger' element={<UserLedger />} />
+              <Route path='/customer-ledger/view/id' element={<ViewLedger />} />
             </Routes>
           </div>
         </AppBar>
