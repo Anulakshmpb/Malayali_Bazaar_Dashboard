@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-    Search,
     Calendar,
     FilterX,
     Download,
@@ -8,6 +7,7 @@ import {
     Printer
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import CommonTable from '../../Shared/Pages/CommonTable';
 
 export default function Orders() {
     const [activeTab, setActiveTab] = useState('All');
@@ -79,18 +79,6 @@ export default function Orders() {
 
                 {/* Filters Section */}
                 <div className="bg-white rounded-2xl shadow-sm border border-tertiary/40 p-5 flex flex-wrap items-center gap-4">
-                    {/* Search */}
-                    <div className="relative flex-1 min-w-[200px]">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Search size={18} className="text-gray-800" />
-                        </div>
-                        <input
-                            type="text"
-                            placeholder="Search by order ID, name..."
-                            className="block w-full pl-10 pr-3 py-2.5 border border-tertiary/60 rounded-xl sm:text-sm text-gray-800 bg-slate-50 hover:bg-white focus:bg-white outline-none focus:outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary/40 transition-colors"
-                        />
-                    </div>
-
                     {/* Date Range */}
                     <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                         <div className="relative">
@@ -121,63 +109,45 @@ export default function Orders() {
                     </button>
                 </div>
 
-                {/* Table Section */}
-                <div className="bg-white rounded-2xl shadow-sm border border-tertiary/40 overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-tertiary/40">
-                            <thead className="bg-slate-50">
-                                <tr>
-                                    <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-secondary uppercase tracking-wider">Sl No.</th>
-                                    <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-secondary uppercase tracking-wider">Order ID</th>
-                                    <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-secondary uppercase tracking-wider">Customer Name</th>
-                                    <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-secondary uppercase tracking-wider">User Type</th>
-                                    <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-secondary uppercase tracking-wider">Date</th>
-                                    <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-secondary uppercase tracking-wider">Payment Method</th>
-                                    <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-secondary uppercase tracking-wider">Total Amount</th>
-                                    <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-secondary uppercase tracking-wider">Paid Amount</th>
-                                    <th scope="col" className="px-6 py-4 text-center text-xs font-semibold text-secondary uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-tertiary/20">
-                                {ordersData.map((order) => (
-                                    <tr key={order.sl} className="hover:bg-slate-50/50 transition-colors group">
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{order.sl}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{order.orderId}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-800">{order.customer}</td>
-                                        <td className='px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800'>{order.type}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-700">{order.date}</td>
-
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-700">{order.payment}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-800">{order.total}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-emerald-600">{order.paid}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-center font-semibold text-sm">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <button className="p-1.5 text-blue-700 hover:text-blue-900 hover:bg-blue-100 rounded-lg transition-colors" title="View Order"
-                                                    onClick={() => navigate('/orders/view')}>
-                                                    <Eye size={18} />
-                                                </button>
-                                                <button className="p-1.5 text-red-700 hover:text-red-900 hover:bg-red-100 rounded-lg transition-colors" title="print">
-                                                    <Printer size={18} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                    {/* Pagination stub */}
-                    <div className="bg-white border-t border-tertiary/40 px-6 py-4 flex items-center justify-between">
-                        <span className="text-sm text-secondary/70">Showing 1 to 6 of 1,250 entries</span>
-                        <div className="flex gap-2">
-                            <button className="px-3 py-1.5 border border-tertiary rounded-lg text-sm font-medium text-secondary hover:bg-slate-50 transition-colors disabled:opacity-50" disabled>Previous</button>
-                            <button className="px-3 py-1.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-secondary transition-colors">1</button>
-                            <button className="px-3 py-1.5 border border-tertiary rounded-lg text-sm font-medium text-secondary hover:bg-slate-50 transition-colors">2</button>
-                            <button className="px-3 py-1.5 border border-tertiary rounded-lg text-sm font-medium text-secondary hover:bg-slate-50 transition-colors">3</button>
-                            <button className="px-3 py-1.5 border border-tertiary rounded-lg text-sm font-medium text-secondary hover:bg-slate-50 transition-colors">Next</button>
-                        </div>
-                    </div>
-                </div>
+                <CommonTable
+                    title="Orders"
+                    subtitle="Review and manage customer orders"
+                    columns={[
+                        { key: "sl", header: "Sl No.", sortable: true },
+                        { key: "orderId", header: "Order ID", sortable: true, cellClassName: "font-bold text-gray-900" },
+                        { key: "customer", header: "Customer Name", sortable: true },
+                        { key: "type", header: "User Type", sortable: true },
+                        { key: "date", header: "Date", sortable: true },
+                        { key: "payment", header: "Payment Method", sortable: true },
+                        { key: "total", header: "Total Amount", sortable: true },
+                        { key: "paid", header: "Paid Amount", sortable: true, cellClassName: "font-semibold text-emerald-600" },
+                    ]}
+                    data={ordersData}
+                    total={ordersData.length}
+                    clientSide
+                    showRowNumbers={false}
+                    rowKey="sl"
+                    searchPlaceholder="Search by order ID, name..."
+                    actions={() => (
+                        <>
+                            <button
+                                type="button"
+                                className="rounded-lg p-2 text-blue-700 transition hover:bg-blue-100 hover:text-blue-900"
+                                title="View Order"
+                                onClick={() => navigate('/orders/view')}
+                            >
+                                <Eye size={18} />
+                            </button>
+                            <button
+                                type="button"
+                                className="rounded-lg p-2 text-red-700 transition hover:bg-red-100 hover:text-red-900"
+                                title="Print order"
+                            >
+                                <Printer size={18} />
+                            </button>
+                        </>
+                    )}
+                />
 
             </div>
         </div>

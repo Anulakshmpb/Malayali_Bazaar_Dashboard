@@ -11,11 +11,10 @@ import {
     UserCheck,
     Users,
     ShoppingBag,
-    Phone,
-    Mail,
     ChevronDown,
     ArrowUpDown
 } from 'lucide-react';
+import CommonTable from '../../Shared/Pages/CommonTable';
 
 export default function User() {
     const navigate = useNavigate();
@@ -161,6 +160,54 @@ export default function User() {
         return colors[name.charCodeAt(0) % colors.length];
     };
 
+    const columns = [
+        {
+            key: 'name',
+            header: 'Name',
+            sortable: true,
+            render: (customer) => {
+                const initials = customer.name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
+
+                return (
+                    <div className="flex items-center gap-3">
+                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold shadow-sm ${getAvatarBg(customer.name)}`}>
+                            {initials}
+                        </div>
+                        <div className="min-w-0">
+                            <p className="line-clamp-1 text-sm font-bold text-gray-900">{customer.name}</p>
+                            <p className="text-[11px] font-medium text-secondary/70">Joined {customer.joined}</p>
+                        </div>
+                    </div>
+                );
+            },
+        },
+        { key: 'phone', header: 'Phone', sortable: true },
+        { key: 'email', header: 'Email', sortable: true },
+        {
+            key: 'orders',
+            header: 'Order Count',
+            sortable: true,
+            align: 'center',
+        },
+        {
+            key: 'status',
+            header: 'Status',
+            sortable: true,
+            align: 'center',
+            render: (customer) => (
+                <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold ${
+                    customer.status === 'Active'
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                        : customer.status === 'Inactive'
+                            ? 'border-slate-200 bg-slate-100 text-slate-600'
+                            : 'border-rose-200 bg-rose-50 text-rose-700'
+                }`}>
+                    {customer.status}
+                </span>
+            ),
+        },
+    ];
+
     return (
         <div className="min-h-screen bg-white pb-12 page-container">
             <div className="max-w-7xl mx-auto space-y-6">
@@ -298,142 +345,46 @@ export default function User() {
                     </div>
                 </div>
 
-                {/* Table Section */}
-                <div className="bg-white rounded-2xl shadow-sm border border-tertiary/40 overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm text-gray-900 border-collapse">
-                            <thead className="bg-slate-50/80 border-b border-tertiary/40">
-                                <tr>
-                                    <th className="px-5 py-4 font-bold text-secondary uppercase text-[11px] tracking-wider w-16 text-center">SL No</th>
-                                    <th className="px-5 py-4 font-bold text-secondary uppercase text-[11px] tracking-wider">Name</th>
-                                    <th className="px-5 py-4 font-bold text-secondary uppercase text-[11px] tracking-wider">Phone</th>
-                                    <th className="px-5 py-4 font-bold text-secondary uppercase text-[11px] tracking-wider">Email</th>
-                                    <th className="px-5 py-4 font-bold text-secondary uppercase text-[11px] tracking-wider text-center">Order Count</th>
-                                    <th className="px-5 py-4 font-bold text-secondary uppercase text-[11px] tracking-wider text-center">Status</th>
-                                    <th className="px-5 py-4 font-bold text-secondary uppercase text-[11px] tracking-wider text-right pr-6">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-tertiary/20">
-                                {filteredCustomers.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={7} className="text-center py-12 text-secondary/70">
-                                            <div className="flex flex-col items-center justify-center gap-2">
-                                                <Users size={32} className="text-secondary/40" />
-                                                <p className="text-base font-bold text-gray-800">No customers found</p>
-                                                <p className="text-xs text-secondary/60">Try adjusting your search or filters.</p>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    filteredCustomers.map((customer, index) => {
-                                        const initials = customer.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-                                        const avatarBg = getAvatarBg(customer.name);
-
-                                        return (
-                                            <tr key={customer.id} className="transition-colors hover:bg-slate-50/60 group">
-                                                
-                                                {/* 1. SL No */}
-                                                <td className="px-5 py-4 text-center font-bold text-secondary/70 text-xs">
-                                                    #{index + 1}
-                                                </td>
-
-                                                {/* 2. Name */}
-                                                <td className="px-5 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`h-9 w-9 rounded-full shrink-0 flex items-center justify-center font-bold text-xs shadow-sm ${avatarBg}`}>
-                                                            {initials}
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <p className="text-sm font-bold text-gray-900 group-hover:text-primary transition-colors line-clamp-1">
-                                                                {customer.name}
-                                                            </p>
-                                                            <p className="text-[11px] font-medium text-secondary/70">
-                                                                Joined {customer.joined}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                </td>
-
-                                                {/* 3. Phone */}
-                                                <td className="px-5 py-4 whitespace-nowrap">
-                                                    <div className="flex items-center gap-2 text-xs font-semibold text-gray-800">
-                                                        <Phone size={13} className="text-secondary/50 shrink-0" />
-                                                        <span>{customer.phone}</span>
-                                                    </div>
-                                                </td>
-
-                                                {/* 4. Email */}
-                                                <td className="px-5 py-4 whitespace-nowrap">
-                                                    <div className="flex items-center gap-2 text-xs font-medium text-gray-700">
-                                                        <Mail size={13} className="text-secondary/50 shrink-0" />
-                                                        <span>{customer.email}</span>
-                                                    </div>
-                                                </td>
-
-                                                {/* 5. Order Count */}
-                                                <td className="px-5 py-4 text-center whitespace-nowrap">
-                                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-gray-900 font-extrabold text-xs border border-tertiary/40">
-                                                        <ShoppingBag size={12} className="text-secondary" />
-                                                        <span>{customer.orders}</span>
-                                                    </span>
-                                                </td>
-
-                                                {/* 6. Status */}
-                                                <td className="px-5 py-4 text-center whitespace-nowrap">
-                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-                                                        customer.status === 'Active'
-                                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                                            : customer.status === 'Inactive'
-                                                            ? 'bg-slate-100 text-slate-600 border-slate-200'
-                                                            : 'bg-rose-50 text-rose-700 border-rose-200'
-                                                    }`}>
-                                                        {customer.status}
-                                                    </span>
-                                                </td>
-
-                                                {/* 7. Action (view, edit, delete) */}
-                                                <td className="px-5 py-4 text-right whitespace-nowrap pr-6">
-                                                    <div className="flex items-center justify-end gap-1.5">
-                                                        {/* View */}
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => navigate('/users/view', { state: { customer } })}
-                                                            className="p-1.5 rounded-lg border border-tertiary/40 bg-slate-50 text-secondary hover:text-primary hover:bg-white transition-colors"
-                                                            title="View Customer Details"
-                                                        >
-                                                            <Eye size={15} />
-                                                        </button>
-
-                                                        {/* Edit */}
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleOpenEdit(customer)}
-                                                            className="p-1.5 rounded-lg border border-tertiary/40 bg-slate-50 text-secondary hover:text-primary hover:bg-white transition-colors"
-                                                            title="Edit Customer"
-                                                        >
-                                                            <Edit2 size={15} />
-                                                        </button>
-
-                                                        {/* Delete */}
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleDelete(customer.id)}
-                                                            className="p-1.5 rounded-lg border border-rose-200/80 bg-rose-50/60 text-rose-600 hover:bg-rose-100 transition-colors"
-                                                            title="Delete Customer"
-                                                        >
-                                                            <Trash2 size={15} />
-                                                        </button>
-                                                    </div>
-                                                </td>
-
-                                            </tr>
-                                        );
-                                    })
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <CommonTable
+                    title="Customer List"
+                    subtitle="Manage customer records"
+                    columns={columns}
+                    data={filteredCustomers}
+                    total={filteredCustomers.length}
+                    clientSide
+                    showSearch={false}
+                    rowKey="id"
+                    emptyMessage="No customers found"
+                    emptyDescription="Try adjusting your search or filters."
+                    actions={(customer) => (
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => navigate('/users/view', { state: { customer } })}
+                                className="rounded-lg p-2 text-secondary transition hover:bg-primary/10 hover:text-primary"
+                                title="View Customer Details"
+                            >
+                                <Eye size={15} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleOpenEdit(customer)}
+                                className="rounded-lg p-2 text-secondary transition hover:bg-slate-100 hover:text-primary"
+                                title="Edit Customer"
+                            >
+                                <Edit2 size={15} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleDelete(customer.id)}
+                                className="rounded-lg p-2 text-rose-600 transition hover:bg-rose-50"
+                                title="Delete Customer"
+                            >
+                                <Trash2 size={15} />
+                            </button>
+                        </>
+                    )}
+                />
 
             </div>
 

@@ -1,4 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { app, storage } from '../../Config/Firebase';
+import { useToast } from '../../Shared/hooks/ToastContext';
 import {
     Plus,
     Search,
@@ -21,10 +25,42 @@ const ASPECT_RATIO_PRESETS = [
     { label: 'Square (1:1)', value: 1 }
 ];
 
+const INITIAL_FORM_DATA = {
+    desktop_img_url: '',
+    mobile_img_url: '',
+    tag: '',
+    title: '',
+    subtitle: '',
+    date: '',
+    linkText: '',
+    link: '',
+    type: 'blank',
+    whatsapp_number: '',
+    whatsappMessage: '',
+    title_color: '#ffffff',
+    subtitle_color: '#f8fafc',
+    tag_color: '#ffffff',
+    tag_bg_color: '#ffffff26',
+    btn_color: '#1e293b',
+    btn_bg_color: '#ffffff',
+    isMainBanner: false,
+    status: true,
+};
+
 export default function Banner() {
+    const functions = useMemo(() => getFunctions(app, 'europe-west1'), []);
+    const manageBanner = useMemo(
+        () => httpsCallable(functions, 'manageBanner'),
+        [functions]
+    );
+    const { showToast } = useToast();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingBannerId, setEditingBannerId] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [banners, setBanners] = useState([]);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [desktopImageFile, setDesktopImageFile] = useState(null);
 
     const [cropImageSrc, setCropImageSrc] = useState(null);
     const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -34,50 +70,44 @@ export default function Banner() {
     const desktopFileInputRef = useRef(null);
     const mobileFileInputRef = useRef(null);
 
-    const [formData, setFormData] = useState({
-        desktop_img_url: '',
-        mobile_img_url: '',
-        tag: '',
-        title: '',
-        subtitle: '',
-        date: '',
-        linkText: '',
-        link: '',
-        type: 'blank',
-        whatsapp_number: '',
-        whatsappMessage: '',
-        title_color: '#ffffff',
-        subtitle_color: '#f8fafc',
-        tag_color: '#ffffff',
-        tag_bg_color: '#ffffff26',
-        btn_color: '#1e293b',
-        btn_bg_color: '#ffffff',
-        isMainBanner: false,
-        status: true
-    });
+    const [formData, setFormData] = useState(INITIAL_FORM_DATA);
 
-    // Mock Banner Data
-    const [banners, setBanners] = useState([
-        {
-            id: 1,
-            desktop_img_url: "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=1200&h=300",
-            tag: "⚡ Online Exclusive",
-            title: "Super Sale 50% Off",
-            status: true
-        },
-        {
-            id: 2,
-            desktop_img_url: "https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?auto=format&fit=crop&w=1200&h=300",
-            tag: "🔥 Hot Deal",
-            title: "Buy 1 Get 1 Free",
-            status: false
+    const loadBanners = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const response = await manageBanner({ action: 'list' });
+            if (!response.data?.success) {
+                throw new Error(response.data?.message || 'Unable to load banners.');
+            }
+            setBanners((response.data.data || []).map(banner => ({
+                ...banner,
+                id: banner.bannerId,
+                desktop_img_url: banner.image || banner.desktop_img_url || '',
+                title: banner.tittle || banner.title || '',
+                subtitle: banner.tagSubtitle || banner.subtitle || '',
+                whatsapp_number: banner.whatsappNo || banner.whatsapp_number || '',
+                whatsappMessage: banner.whatsappMessage || '',
+                isMainBanner: Boolean(banner.mainBanner ?? banner.isMainBanner),
+                status: banner.status ?? true,
+            })));
+        } catch (error) {
+            console.error('Failed to load banners:', error);
+            showToast(error.message || 'Unable to load banners.', 'error');
+        } finally {
+            setIsLoading(false);
         }
-    ]);
+    }, [manageBanner, showToast]);
+
+    useEffect(() => {
+        loadBanners();
+    }, [loadBanners]);
 
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setEditingBannerId(null);
         setCropImageSrc(null);
+        setDesktopImageFile(null);
+        setFormData(INITIAL_FORM_DATA);
     };
 
     const handleChange = (e) => {
@@ -90,7 +120,9 @@ export default function Banner() {
 
     const handleDesktopImageChange = (e) => {
         if (e.target.files && e.target.files[0]) {
-            setFormData(prev => ({ ...prev, desktop_img_url: URL.createObjectURL(e.target.files[0]) }));
+            const file = e.target.files[0];
+            setDesktopImageFile(file);
+            setFormData(prev => ({ ...prev, desktop_img_url: URL.createObjectURL(file) }));
         }
     };
 
@@ -118,19 +150,96 @@ export default function Banner() {
         setCropImageSrc(null);
     };
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         setIsSaving(true);
-        setTimeout(() => {
-            setIsSaving(false);
+        try {
+            let image = formData.desktop_img_url;
+            if (desktopImageFile) {
+                const imageRef = ref(storage, `banners/${crypto.randomUUID()}-${desktopImageFile.name}`);
+                await uploadBytes(imageRef, desktopImageFile);
+                image = await getDownloadURL(imageRef);
+            }
+            if (!image) {
+                throw new Error('Please upload a desktop banner image.');
+            }
+
+            const fields = {
+                tag: formData.tag,
+                tittle: formData.title,
+                tagSubtitle: formData.subtitle,
+                date: formData.date,
+                linkText: formData.linkText,
+                link: formData.link,
+                type: formData.type,
+                whatsappNo: formData.whatsapp_number,
+                whatsappMessage: formData.whatsappMessage,
+                mainBanner: Boolean(formData.isMainBanner),
+                status: Boolean(formData.status),
+                image,
+            };
+            const response = await manageBanner({
+                action: editingBannerId ? 'update' : 'add',
+                fields: {
+                    ...(editingBannerId ? { bannerId: editingBannerId } : {}),
+                    ...fields,
+                },
+            });
+            if (!response.data?.success) {
+                throw new Error(response.data?.message || 'Unable to save banner.');
+            }
+
+            showToast(response.data.message || 'Banner saved successfully.', 'success');
             handleCloseModal();
-        }, 1000);
+            await loadBanners();
+        } catch (error) {
+            console.error('Failed to save banner:', error);
+            showToast(error.message || 'Unable to save banner.', 'error');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
-    const toggleVisibility = (id) => {
-        setBanners(banners.map(b =>
-            b.id === id ? { ...b, status: !b.status } : b
-        ));
+    const handleDelete = async (banner) => {
+        if (!window.confirm(`Delete banner "${banner.title || banner.tag || 'Untitled'}"?`)) return;
+        try {
+            const response = await manageBanner({
+                action: 'delete',
+                fields: { bannerId: banner.id },
+            });
+            if (!response.data?.success) {
+                throw new Error(response.data?.message || 'Unable to delete banner.');
+            }
+            showToast(response.data.message || 'Banner deleted successfully.', 'success');
+            await loadBanners();
+        } catch (error) {
+            console.error('Failed to delete banner:', error);
+            showToast(error.message || 'Unable to delete banner.', 'error');
+        }
     };
+
+    const toggleVisibility = async (banner) => {
+        try {
+            const response = await manageBanner({
+                action: 'update',
+                fields: {
+                    bannerId: banner.id,
+                    status: !banner.status,
+                },
+            });
+            if (!response.data?.success) {
+                throw new Error(response.data?.message || 'Unable to update banner status.');
+            }
+            await loadBanners();
+        } catch (error) {
+            console.error('Failed to update banner status:', error);
+            showToast(error.message || 'Unable to update banner status.', 'error');
+        }
+    };
+
+    const filteredBanners = banners.filter(banner => (
+        [banner.tag, banner.title, banner.subtitle]
+            .some(value => String(value || '').toLowerCase().includes(searchTerm.trim().toLowerCase()))
+    ));
 
     return (
         <div className="min-h-screen bg-white pb-10 page-container">
@@ -145,7 +254,12 @@ export default function Banner() {
 
                     <div className="flex flex-wrap gap-3">
                         <button
-                            onClick={() => setIsModalOpen(true)}
+                            onClick={() => {
+                                setFormData(INITIAL_FORM_DATA);
+                                setEditingBannerId(null);
+                                setDesktopImageFile(null);
+                                setIsModalOpen(true);
+                            }}
                             className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-secondary focus:outline-none focus:ring-4 focus:ring-primary/20"
                         >
                             <Plus size={18} />
@@ -160,6 +274,8 @@ export default function Banner() {
                         <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary/50" />
                         <input
                             type="text"
+                            value={searchTerm}
+                            onChange={event => setSearchTerm(event.target.value)}
                             placeholder="Search banners..."
                             className="w-full rounded-lg border border-tertiary/60 bg-slate-50 py-2.5 pl-10 pr-4 text-sm font-medium text-gray-900 outline-none transition-colors placeholder:text-secondary/50 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10"
                         />
@@ -170,8 +286,17 @@ export default function Banner() {
                 </div>
 
                 {/* Banners Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {banners.map((banner) => (
+                {isLoading ? (
+                    <div className="rounded-xl border border-tertiary/40 bg-white px-6 py-12 text-center text-sm text-secondary/70">
+                        Loading banners...
+                    </div>
+                ) : filteredBanners.length === 0 ? (
+                    <div className="rounded-xl border border-tertiary/40 bg-white px-6 py-12 text-center text-sm text-secondary/70">
+                        {searchTerm ? 'No banners match your search.' : 'No banners have been added yet.'}
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    {filteredBanners.map((banner) => (
                         <div key={banner.id} className="group relative overflow-hidden rounded-2xl border border-tertiary/40 bg-white shadow-sm transition-all hover:shadow-lg hover:border-tertiary/60 flex flex-col">
                             {/* Banner Image */}
                             <div className="relative h-28 w-full overflow-hidden bg-slate-100">
@@ -184,16 +309,32 @@ export default function Banner() {
 
                                 <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
                                     <button
+                                        type="button"
                                         onClick={() => {
-                                            setFormData(prev => ({ ...prev, ...banner }));
+                                            setFormData({
+                                                ...INITIAL_FORM_DATA,
+                                                ...banner,
+                                                desktop_img_url: banner.desktop_img_url || banner.image || '',
+                                                title: banner.title || banner.tittle || '',
+                                                subtitle: banner.subtitle || banner.tagSubtitle || '',
+                                                whatsapp_number: banner.whatsapp_number || banner.whatsappNo || '',
+                                                whatsappMessage: banner.whatsappMessage || '',
+                                                isMainBanner: Boolean(banner.isMainBanner ?? banner.mainBanner),
+                                            });
                                             setEditingBannerId(banner.id);
+                                            setDesktopImageFile(null);
                                             setIsModalOpen(true);
                                         }}
                                         className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/95 text-gray-900 shadow-lg backdrop-blur transition hover:bg-white hover:text-primary focus:outline-none"
                                     >
                                         <Edit size={16} />
                                     </button>
-                                    <button className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/95 text-rose-500 shadow-lg backdrop-blur transition hover:bg-rose-50 hover:text-rose-600 focus:outline-none">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDelete(banner)}
+                                        title="Delete banner"
+                                        className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/95 text-rose-500 shadow-lg backdrop-blur transition hover:bg-rose-50 hover:text-rose-600 focus:outline-none"
+                                    >
                                         <Trash2 size={16} />
                                     </button>
                                 </div>
@@ -213,8 +354,8 @@ export default function Banner() {
                                         <input
                                             type="checkbox"
                                             className="sr-only peer"
-                                            checked={banner.status}
-                                            onChange={() => toggleVisibility(banner.id)}
+                                            checked={Boolean(banner.status)}
+                                            onChange={() => toggleVisibility(banner)}
                                         />
                                         <div className="h-6 w-11 rounded-full bg-slate-200 shadow-inner peer-focus:outline-none peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                                     </label>
@@ -223,6 +364,7 @@ export default function Banner() {
                         </div>
                     ))}
                 </div>
+                )}
             </div>
 
             {/* Banner Form Modal */}
@@ -505,7 +647,7 @@ export default function Banner() {
                                     </div>
 
                                     {/* Color Styling */}
-                                    <div className="bg-slate-50 p-5 rounded-xl border border-tertiary/40 space-y-4">
+                                    {/* <div className="bg-slate-50 p-5 rounded-xl border border-tertiary/40 space-y-4">
                                         <h4 className="text-sm font-bold text-gray-900">Banner Colors Styling</h4>
                                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                                             {[
@@ -533,7 +675,7 @@ export default function Banner() {
                                                 </div>
                                             ))}
                                         </div>
-                                    </div>
+                                    </div> */}
                                 </>
                             )}
                         </div>
