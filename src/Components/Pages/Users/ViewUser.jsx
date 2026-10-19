@@ -16,6 +16,7 @@ import {
     Eye,
     Building2
 } from 'lucide-react';
+import CommonTable from '../../Shared/Pages/CommonTable';
 
 export default function ViewUser() {
     const location = useLocation();
@@ -376,98 +377,71 @@ export default function ViewUser() {
                         <div className="p-6 sm:p-8 space-y-8 animate-in fade-in duration-200">
                             {/* Order History Table Section */}
                             <div className="space-y-4">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                    <div>
-                                        <h3 className="text-lg font-bold text-gray-900">Order History</h3>
-                                    </div>
-                                    <span className="text-xs font-bold text-secondary">
-                                        Showing {orderHistory.length} orders
-                                    </span>
-                                </div>
-
-                                <div className="border border-tertiary/40 rounded-2xl overflow-hidden shadow-sm bg-white">
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left text-sm text-gray-900 border-collapse">
-                                            <thead className="bg-slate-50/80 border-b border-tertiary/40">
-                                                <tr>
-                                                    <th className="px-5 py-3.5 font-bold text-secondary uppercase text-[11px] tracking-wider">Order ID</th>
-                                                    <th className="px-5 py-3.5 font-bold text-secondary uppercase text-[11px] tracking-wider">Date & Time</th>
-                                                    <th className="px-5 py-3.5 font-bold text-secondary uppercase text-[11px] tracking-wider">Purchased Items</th>
-                                                    <th className="px-5 py-3.5 font-bold text-secondary uppercase text-[11px] tracking-wider">Payment Method</th>
-                                                    <th className="px-5 py-3.5 font-bold text-secondary uppercase text-[11px] tracking-wider text-right">Total Amount</th>
-                                                    <th className="px-5 py-3.5 font-bold text-secondary uppercase text-[11px] tracking-wider text-center">Status</th>
-                                                    <th className="px-5 py-3.5 font-bold text-secondary uppercase text-[11px] tracking-wider text-right pr-6">Action</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-tertiary/20">
-                                                {orderHistory.map((order) => (
-                                                    <tr key={order.id} className="hover:bg-slate-50/60 transition-colors group">
-
-                                                        {/* Order ID */}
-                                                        <td className="px-5 py-4 whitespace-nowrap">
-                                                            <span className="font-mono font-bold text-xs text-primary group-hover:underline">
-                                                                #{order.id}
-                                                            </span>
-                                                        </td>
-
-                                                        {/* Date & Time */}
-                                                        <td className="px-5 py-4 whitespace-nowrap">
-                                                            <div className="text-xs">
-                                                                <p className="font-bold text-gray-900">{order.date}</p>
-                                                                <p className="text-secondary/70 flex items-center gap-1 mt-0.5">
-                                                                    <Clock size={11} /> {order.time}
-                                                                </p>
-                                                            </div>
-                                                        </td>
-
-                                                        {/* Items */}
-                                                        <td className="px-5 py-4">
-                                                            <p className="text-xs font-medium text-gray-800 line-clamp-1 max-w-xs" title={order.items}>
-                                                                {order.items}
-                                                            </p>
-                                                        </td>
-
-                                                        {/* Payment Method */}
-                                                        <td className="px-5 py-4 whitespace-nowrap">
-                                                            <span className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-                                                                <CreditCard size={13} className="text-secondary" />
-                                                                {order.paymentMethod}
-                                                            </span>
-                                                        </td>
-
-                                                        {/* Total Amount */}
-                                                        <td className="px-5 py-4 text-right whitespace-nowrap">
-                                                            <span className="font-black text-sm text-gray-900">
-                                                                {order.total}
-                                                            </span>
-                                                        </td>
-
-                                                        {/* Status */}
-                                                        <td className="px-5 py-4 text-center whitespace-nowrap">
-                                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${getStatusBadge(order.status)}`}>
-                                                                {order.status}
-                                                            </span>
-                                                        </td>
-
-                                                        {/* Action */}
-                                                        <td className="px-5 py-4 text-right whitespace-nowrap pr-6">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => navigate('/orders/view')}
-                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-tertiary/40 bg-slate-50 text-secondary hover:text-primary hover:bg-white text-xs font-bold transition-colors shadow-sm"
-                                                                title="View Full Order"
-                                                            >
-                                                                <Eye size={13} />
-                                                                <span>View</span>
-                                                            </button>
-                                                        </td>
-
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
+                                <CommonTable
+                                    title="Order History"
+                                    subtitle={`Showing ${orderHistory.length} orders`}
+                                    columns={[
+                                        { key: "id", header: "Order ID", sortable: true, cellClassName: "font-mono font-bold text-primary" },
+                                        {
+                                            key: "date",
+                                            header: "Date & Time",
+                                            sortable: true,
+                                            render: (order) => (
+                                                <div className="text-xs">
+                                                    <p className="font-bold text-gray-900">{order.date}</p>
+                                                    <p className="mt-0.5 flex items-center gap-1 text-secondary/70">
+                                                        <Clock size={11} /> {order.time}
+                                                    </p>
+                                                </div>
+                                            ),
+                                        },
+                                        {
+                                            key: "items",
+                                            header: "Purchased Items",
+                                            render: (order) => <span title={order.items}>{order.items}</span>,
+                                        },
+                                        {
+                                            key: "paymentMethod",
+                                            header: "Payment Method",
+                                            sortable: true,
+                                            render: (order) => (
+                                                <span className="flex items-center gap-1.5">
+                                                    <CreditCard size={13} className="text-secondary" />
+                                                    {order.paymentMethod}
+                                                </span>
+                                            ),
+                                        },
+                                        { key: "total", header: "Total Amount", align: "right", sortable: true, cellClassName: "font-bold text-gray-900" },
+                                        {
+                                            key: "status",
+                                            header: "Status",
+                                            sortable: true,
+                                            align: "center",
+                                            render: (order) => (
+                                                <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${getStatusBadge(order.status)}`}>
+                                                    {order.status}
+                                                </span>
+                                            ),
+                                        },
+                                    ]}
+                                    data={orderHistory}
+                                    total={orderHistory.length}
+                                    clientSide
+                                    showRowNumbers={false}
+                                    rowKey="id"
+                                    searchPlaceholder="Search order history..."
+                                    actions={() => (
+                                        <button
+                                            type="button"
+                                            onClick={() => navigate('/orders/view')}
+                                            className="inline-flex items-center gap-1.5 rounded-lg border border-tertiary/40 bg-slate-50 px-3 py-1.5 text-xs font-bold text-secondary shadow-sm transition-colors hover:bg-white hover:text-primary"
+                                            title="View Full Order"
+                                        >
+                                            <Eye size={13} />
+                                            <span>View</span>
+                                        </button>
+                                    )}
+                                />
                             </div>
 
                         </div>

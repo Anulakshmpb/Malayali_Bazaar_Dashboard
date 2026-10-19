@@ -19,6 +19,7 @@ import {
   PlusCircle,
   Boxes
 } from "lucide-react";
+import { adminLogout } from '../Pages/Auth/services/auth.api';
 
 function AppBar({ children }) {
   const location = useLocation();
@@ -64,7 +65,7 @@ function AppBar({ children }) {
       items: [
         {
           name: "Dashboard",
-          path: "/",
+          path: "/dashboard",
           icon: LayoutDashboard,
         },
         {
@@ -113,12 +114,17 @@ function AppBar({ children }) {
           path: "/users",
           icon: Users,
         },
-         {
+        {
           name: "Customer Ledger",
           path: "/customer-ledger",
           icon: Layers,
         },
-         {
+          {
+          name: "Delivery Charges",
+          path: "/delivery-charges",
+          icon: Truck,
+        },
+        {
           name: "Website Management",
           icon: FileText,
           subItems: [
@@ -142,7 +148,7 @@ function AppBar({ children }) {
               path: "/shipping",
               icon: FileCheck,
             },
-              {
+            {
               name: "Common Section",
               path: "/common-section",
               icon: FileCheck,
@@ -225,6 +231,16 @@ function AppBar({ children }) {
     },
   ];
 
+  const handleLogout = async () => {
+    try {
+      await adminLogout();
+      closeSidebar();
+      navigate('/', { replace: true });
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+  
   return (
     <>
       {/* =====================================================
@@ -484,7 +500,7 @@ function AppBar({ children }) {
 
                 <button
                   type="button"
-                  onClick={() => navigate("/login")}
+                  onClick={handleLogout}
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2 font-inter text-[13px] font-medium text-red-500 transition hover:bg-red-50 hover:text-red-600"
                 >
                   <svg

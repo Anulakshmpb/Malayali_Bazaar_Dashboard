@@ -18,6 +18,7 @@ import {
   Filter,
   CircleDollarSign,
 } from "lucide-react";
+import CommonTable from "../../Shared/Pages/CommonTable";
 
 
 const MOCK_LEDGER = [
@@ -586,153 +587,97 @@ export default function UserLedger() {
               </button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1050px] border-collapse text-left">
-                <thead>
-                  <tr className="border-b border-border bg-background/70">
-                    <th className="px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-muted">
-                      #
-                    </th>
-
-                    <th className="px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-muted">
-                      Customer
-                    </th>
-
-                    <th className="px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-muted">
-                      Mobile
-                    </th>
-
-                    <th className="px-5 py-4 text-center text-[11px] font-bold uppercase tracking-wider text-muted">
-                      Orders
-                    </th>
-
-                    <th className="px-5 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-muted">
-                      Receivable
-                    </th>
-
-                    <th className="px-5 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-muted">
-                      Paid
-                    </th>
-
-                    <th className="px-5 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-muted">
-                      Outstanding
-                    </th>
-
-                    <th className="px-5 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-muted">
-                      Last Updated
-                    </th>
-
-                    <th className="px-5 py-4 text-center text-[11px] font-bold uppercase tracking-wider text-muted">
-                      Action
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-border">
-                  {filtered.map((customer, index) => {
-                    const hasDue =
-                      Number(customer.payableAmount || 0) > 0;
-
+            <CommonTable
+              title="Customer Ledger"
+              subtitle="Review balances, payments, and recent activity"
+              columns={[
+                {
+                  key: "name",
+                  header: "Customer",
+                  sortable: true,
+                  render: (customer) => (
+                    <div className="flex min-w-[190px] items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-bold text-primary">
+                        {(customer.name || "?").charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-main">{customer.name || "Unnamed customer"}</p>
+                        <p className="mt-1 text-xs text-muted">{customer.uid || customer.id}</p>
+                      </div>
+                    </div>
+                  ),
+                },
+                { key: "mobile", header: "Mobile", sortable: true, render: (customer) => customer.mobile || "—" },
+                { key: "orders", header: "Orders", sortable: true, align: "center" },
+                {
+                  key: "recievableAmount",
+                  header: "Receivable",
+                  sortable: true,
+                  align: "right",
+                  render: (customer) => fmt(customer.recievableAmount),
+                  cellClassName: "font-semibold text-blue-600",
+                },
+                {
+                  key: "paidAmount",
+                  header: "Paid",
+                  sortable: true,
+                  align: "right",
+                  render: (customer) => fmt(customer.paidAmount),
+                  cellClassName: "font-semibold text-emerald-600",
+                },
+                {
+                  key: "payableAmount",
+                  header: "Outstanding",
+                  sortable: true,
+                  align: "right",
+                  render: (customer) => {
+                    const hasDue = Number(customer.payableAmount || 0) > 0;
                     return (
-                      <tr
-                        key={customer.id}
-                        className="group transition-colors hover:bg-primary/[0.035]"
-                      >
-                        <td className="whitespace-nowrap px-5 py-4 text-xs font-medium text-muted">
-                          {String(index + 1).padStart(2, "0")}
-                        </td>
-
-                        <td className="px-5 py-4">
-                          <div className="flex min-w-[190px] items-center gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-bold text-primary">
-                              {(customer.name || "?")
-                                .charAt(0)
-                                .toUpperCase()}
-                            </div>
-
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold text-main">
-                                {customer.name || "Unnamed customer"}
-                              </p>
-
-                              <p className="mt-1 text-xs text-muted">
-                                {customer.uid || customer.id}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-
-                        <td className="whitespace-nowrap px-5 py-4">
-                          <div className="flex items-center gap-2 text-sm text-main">
-                            <Phone size={14} className="shrink-0 text-muted" />
-                            {customer.mobile || "—"}
-                          </div>
-                        </td>
-
-                        <td className="px-5 py-4 text-center">
-                          <span className="inline-flex min-w-9 items-center justify-center rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-bold text-main">
-                            {customer.orders || 0}
-                          </span>
-                        </td>
-
-                        <td className="whitespace-nowrap px-5 py-4 text-right text-sm font-semibold text-blue-600">
-                          {fmt(customer.recievableAmount)}
-                        </td>
-
-                        <td className="whitespace-nowrap px-5 py-4 text-right text-sm font-semibold text-emerald-600">
-                          {fmt(customer.paidAmount)}
-                        </td>
-
-                        <td className="whitespace-nowrap px-5 py-4 text-right">
-                          <div className="flex flex-col items-end gap-1">
-                            <span
-                              className={`text-sm font-bold ${hasDue ? "text-rose-600" : "text-emerald-600"
-                                }`}
-                            >
-                              {fmt(customer.payableAmount)}
-                            </span>
-
-                            <span
-                              className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${hasDue
-                                  ? "bg-rose-50 text-rose-600"
-                                  : "bg-emerald-50 text-emerald-600"
-                                }`}
-                            >
-                              {hasDue ? "PAYMENT DUE" : "SETTLED"}
-                            </span>
-                          </div>
-                        </td>
-
-                        <td className="whitespace-nowrap px-5 py-4">
-                          <div className="flex items-center gap-2 text-xs text-muted">
-                            <CalendarDays size={14} />
-                            {fmtDate(customer.updatedAt)}
-                          </div>
-                        </td>
-
-                        <td className="px-5 py-4">
-                          <div className="flex items-center justify-center">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                navigate(`/customer-ledger/view/id`)
-                              }
-                              title="View ledger details"
-                              aria-label={`View ledger details for ${customer.name}`}
-                              className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-main transition hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
-                            >
-                              <Eye size={15} />
-                              View
-                              <ChevronRight size={13} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`text-sm font-bold ${hasDue ? "text-rose-600" : "text-emerald-600"}`}>
+                          {fmt(customer.payableAmount)}
+                        </span>
+                        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${hasDue ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"}`}>
+                          {hasDue ? "PAYMENT DUE" : "SETTLED"}
+                        </span>
+                      </div>
                     );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                  },
+                },
+                {
+                  key: "updatedAt",
+                  header: "Last Updated",
+                  sortable: true,
+                  render: (customer) => (
+                    <span className="flex items-center gap-2 text-xs text-muted">
+                      <CalendarDays size={14} />
+                      {fmtDate(customer.updatedAt)}
+                    </span>
+                  ),
+                },
+              ]}
+              data={filtered}
+              total={filtered.length}
+              clientSide
+              showSearch={false}
+              rowKey="id"
+              searchPlaceholder="Search customers..."
+              emptyMessage="No customers found"
+              emptyDescription="Try another search term or change the selected filters."
+              actions={(customer) => (
+                <button
+                  type="button"
+                  onClick={() => navigate("/customer-ledger/view/id")}
+                  title="View ledger details"
+                  aria-label={`View ledger details for ${customer.name}`}
+                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-main transition hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+                >
+                  <Eye size={15} />
+                  View
+                  <ChevronRight size={13} />
+                </button>
+              )}
+            />
           )}
 
           {/* TABLE FOOTER */}

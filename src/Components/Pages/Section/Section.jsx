@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import {
     Plus,
     Upload,
-    Search,
     Edit,
     Trash2,
     X,
     Eye
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import CommonTable from '../../Shared/Pages/CommonTable';
 
 export default function Section() {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -48,62 +48,49 @@ export default function Section() {
                     </div>
                 </div>
 
-                {/* Toolbar */}
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 rounded-xl border border-tertiary/40 bg-white p-4 shadow-sm">
-                    <div className="relative w-full sm:max-w-md">
-                        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary/50" />
-                        <input
-                            type="text"
-                            placeholder="Search categories..."
-                            className="w-full rounded-lg border border-tertiary/60 bg-slate-50 py-2.5 pl-10 pr-4 text-sm font-medium text-gray-900 outline-none transition-colors placeholder:text-secondary/50 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10"
-                        />
-                    </div>
-                    <div className="text-sm font-bold text-gray-900">
-                        Total: {section.length} Sections
-                    </div>
-                </div>
-
-                {/* Categories Table */}
-                <div className="overflow-hidden rounded-xl border border-tertiary/40 bg-white shadow-sm">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm text-gray-900">
-                            <thead className="bg-slate-50 border-b border-tertiary/40">
-                                <tr>
-                                    <th className="px-6 py-4 font-bold text-secondary uppercase text-[11px] tracking-wider">SL No</th>
-                                    <th className="px-6 py-4 font-bold text-secondary uppercase text-[11px] tracking-wider">Name</th>
-                                    <th className="px-6 py-4 font-bold text-secondary uppercase text-[11px] tracking-wider text-center">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-tertiary/20">
-                                {section.map((category, index) => (
-                                    <tr key={category.id} className="transition-colors hover:bg-slate-50/50 group">
-                                        <td className="px-6 py-4 font-bold text-gray-900">
-                                            #{index + 1}
-                                        </td>
-
-                                        <td className="px-6 py-4">
-                                            <span className="text-base font-bold text-gray-900">{category.name}</span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <button className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 border border-tertiary/60 text-emerald-900 shadow-sm transition hover:bg-white hover:text-emerald-900 focus:outline-none"
-                                                    onClick={() => navigate(`/section/view`)}>
-                                                    <Eye size={16} />
-                                                </button>
-                                                <button className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-50 border border-tertiary/60 text-gray-900 shadow-sm transition hover:bg-white hover:text-primary focus:outline-none">
-                                                    <Edit size={16} />
-                                                </button>
-                                                <button className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-50 border border-rose-200 text-rose-600 shadow-sm transition hover:bg-rose-500 hover:text-white hover:border-rose-500 focus:outline-none">
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <CommonTable
+                    title="Sections"
+                    subtitle="Manage the sections shown in your catalogue"
+                    columns={[
+                        {
+                            key: "name",
+                            header: "Name",
+                            sortable: true,
+                            cellClassName: "font-semibold text-gray-900",
+                        },
+                    ]}
+                    data={section}
+                    total={section.length}
+                    clientSide
+                    rowKey="id"
+                    searchPlaceholder="Search sections..."
+                    actions={() => (
+                        <>
+                            <button
+                                type="button"
+                                title="View section"
+                                className="rounded-lg p-2 text-emerald-700 transition hover:bg-emerald-50"
+                                onClick={() => navigate("/section/view")}
+                            >
+                                <Eye size={16} />
+                            </button>
+                            <button
+                                type="button"
+                                title="Edit section"
+                                className="rounded-lg p-2 text-gray-700 transition hover:bg-slate-100 hover:text-primary"
+                            >
+                                <Edit size={16} />
+                            </button>
+                            <button
+                                type="button"
+                                title="Delete section"
+                                className="rounded-lg p-2 text-rose-600 transition hover:bg-rose-50"
+                            >
+                                <Trash2 size={16} />
+                            </button>
+                        </>
+                    )}
+                />
 
             </div>
 
