@@ -1,8 +1,7 @@
 import React from 'react';
 import { Toaster } from 'sonner';
-
-import AppRoutes from './Components/Routes/Routes';
 import { ToastProvider } from './Components/Shared/hooks/ToastContext';
+import AppRoutes from './Components/Routes/Routes';
 
 function App() {
   return (
