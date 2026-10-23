@@ -1,8 +1,10 @@
 
-import {FieldValue} from "firebase-admin/firestore";
+// eslint-disable-next-line object-curly-spacing
+import { FieldValue } from "firebase-admin/firestore";
 import {db, auth} from "../../shared/config.js";
 import {logInfo} from "../../shared/logger.js";
 /* eslint-disable max-len */
+
 
 const normalizeMobile = (mobile = "") =>
   mobile.replace(/[\s()-]/g, "");
@@ -27,7 +29,7 @@ const addAdminUserService = async (data, req) => {
   try {
     if (action === "add") {
       const normalizedMobile = normalizeMobile(mobile);
-      if (!name ||!email ||!password ||!normalizedMobile ||!role) {
+      if (!name || !email || !password || !normalizedMobile || !role) {
         return {
           success: false,
           error: "Name, email, password, mobile, and role are required.",
@@ -61,11 +63,12 @@ const addAdminUserService = async (data, req) => {
           mobile: normalizedMobile,
           role,
           status: "active",
+          uid: uid,
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
       } catch (firestoreError) {
-        await auth.deleteUser(uid).catch(() => {});
+        await auth.deleteUser(uid).catch(() => { });
         throw firestoreError;
       }
       logInfo(`Admin ${uid} created successfully`);
@@ -240,10 +243,10 @@ const editPermissionsService = async (data, req) => {
         }
         const existing = document.data();
         const existingName =
-                    existing.permissionName ||
-                    "";
+          existing.permissionName ||
+          "";
         return normalizeName(existingName) ===
-            normalizeName(roleName);
+          normalizeName(roleName);
       });
       if (duplicate) {
         return {
