@@ -17,7 +17,7 @@ const productFields = {
         productName: Joi.string().required(),
       }),
   ),
-  description: Joi.string().allow("", null),
+  details: Joi.object().unknown(true).allow(null),
   isActive: Joi.boolean(),
   taxApplicable: Joi.boolean(),
   taxPercentage: Joi.number().min(0).max(100).allow("", null),

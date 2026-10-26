@@ -51,6 +51,12 @@ export default function AddProduct() {
     const [productLoadError, setProductLoadError] = useState(false);
     const [existingThumbnail, setExistingThumbnail] = useState('');
     const [existingGallery, setExistingGallery] = useState([]);
+    const [details, setDetails] = useState({
+        description: '',
+        shelfLife: '',
+        storageInstructions: '',
+        ingredients: '',
+    });
 
     useEffect(() => {
         let active = true;
@@ -172,6 +178,12 @@ export default function AddProduct() {
                 setRelatedProducts(data.relatedProduct || []);
                 setExistingThumbnail(data.thumbnail || '');
                 setExistingGallery(data.images || []);
+                setDetails({
+                    description: data.details?.description || '',
+                    shelfLife: data.details?.shelfLife || '',
+                    storageInstructions: data.details?.storageInstructions || '',
+                    ingredients: data.details?.ingredients || '',
+                });
             } catch (error) {
                 if (!active) return;
                 console.error('Failed to load product for editing:', error);
@@ -443,7 +455,12 @@ export default function AddProduct() {
                         productId: product.productId,
                         productName: product.productName,
                     })),
-                description: formValue('description'),
+                details: {
+                    description: details.description.trim(),
+                    shelfLife: details.shelfLife.trim(),
+                    storageInstructions: details.storageInstructions.trim(),
+                    ingredients: details.ingredients.trim(),
+                },
                 isActive: formData.has('isActive'),
                 taxApplicable,
                 taxPercentage: taxApplicable ? numberValue('taxPercentage') : null,
@@ -640,24 +657,79 @@ export default function AddProduct() {
                                         : []),
                                 ]}
                             />
-                            <div className="sm:col-span-2 lg:col-span-2">
-                                <label
-                                    htmlFor="description"
-                                    className={labelClass}
-                                >
-                                    Product Description
-                                </label>
-
-                                <textarea
-                                    id="description"
-                                    name="description"
-                                    rows={1}
-                                    defaultValue={productData?.description || ''}
-                                    placeholder="Describe product features and details..."
-                                    className={`${inputClass} resize-y`}
-                                />
-                            </div>
+                           
                         </div>
+                         <div className="mt-3">
+                                <label className={labelClass}>
+                                    Product Details
+                                </label>
+                                <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-4">
+                                    <div>
+                                        <label
+                                            htmlFor="details-description"
+                                            className="mb-1 block text-xs font-medium text-gray-600"
+                                        >
+                                            Description
+                                        </label>
+                                        <textarea
+                                            id="details-description"
+                                            rows={2}
+                                            value={details.description}
+                                            onChange={event => setDetails(prev => ({ ...prev, description: event.target.value }))}
+                                            placeholder="Product description..."
+                                            className={`${inputClass} resize-y`}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label
+                                            htmlFor="details-shelfLife"
+                                            className="mb-1 block text-xs font-medium text-gray-600"
+                                        >
+                                            Shelf Life
+                                        </label>
+                                        <textarea
+                                            id="details-shelfLife"
+                                            rows={2}
+                                            value={details.shelfLife}
+                                            onChange={event => setDetails(prev => ({ ...prev, shelfLife: event.target.value }))}
+                                            placeholder="e.g. 12 months from manufacturing date"
+                                            className={`${inputClass} resize-y`}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label
+                                            htmlFor="details-storageInstructions"
+                                            className="mb-1 block text-xs font-medium text-gray-600"
+                                        >
+                                            Storage Instructions
+                                        </label>
+                                        <textarea
+                                            id="details-storageInstructions"
+                                            rows={2}
+                                            value={details.storageInstructions}
+                                            onChange={event => setDetails(prev => ({ ...prev, storageInstructions: event.target.value }))}
+                                            placeholder="e.g. Store in a cool, dry place"
+                                            className={`${inputClass} resize-y`}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label
+                                            htmlFor="details-ingredients"
+                                            className="mb-1 block text-xs font-medium text-gray-600"
+                                        >
+                                            Ingredients
+                                        </label>
+                                        <textarea
+                                            id="details-ingredients"
+                                            rows={2}
+                                            value={details.ingredients}
+                                            onChange={event => setDetails(prev => ({ ...prev, ingredients: event.target.value }))}
+                                            placeholder="List of ingredients..."
+                                            className={`${inputClass} resize-y`}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
 
                         <div className="mt-3">
                             <label htmlFor="relatedProducts" className={labelClass}>Related Products</label>
