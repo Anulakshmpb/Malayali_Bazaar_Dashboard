@@ -22,13 +22,13 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { db } from "../../Config/Firebase";
 import CommonTable from "../../Shared/Pages/CommonTable";
 
-const ADMIN_ROLES = ["Super Admin", "Manager Admin", "Editor"];
 const functions = getFunctions(getApp(), "europe-west1");
 const adminCallable = httpsCallable(functions, "manageAdmin");
 
 const INITIAL_FORM = {
   name: "",
-  role: "Editor",
+  role: "",
+  permissionId: "",
   email: "",
   mobile: "",
   password: "",
@@ -71,6 +71,8 @@ export default function AdminUsers() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  const [permission, setPermission] = useState([]);
+
   useEffect(() => {
     setLoading(true);
     const adminsRef = collection(db, "adminUsers");
@@ -97,6 +99,40 @@ export default function AdminUsers() {
         console.error("Failed to load admin users:", err);
         setError(
           "Unable to load administrators. Check your Firestore permissions."
+        );
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+
+  useEffect(() => {
+    setLoading(true);
+    const permissionRef = collection(db, "permissions");
+    const unsubscribe = onSnapshot(
+      permissionRef,
+      (snapshot) => {
+        const permissionList = snapshot.docs
+          .map((document) => ({
+            id: document.id,
+            ...document.data(),
+          }))
+          .sort((a, b) =>
+            String(a.name || "").localeCompare(
+              String(b.name || "")
+            )
+          );
+
+        setPermission(permissionList);
+        setLoading(false);
+        setError("");
+      },
+      (err) => {
+        console.error("Failed to load permissions:", err);
+        setError(
+          "Unable to load permissions. Check your Firestore permissions."
         );
         setLoading(false);
       }
@@ -140,9 +176,13 @@ export default function AdminUsers() {
   const handleEdit = (admin) => {
     setEditingAdmin(admin);
 
+    const roleName = admin.role || "Editor";
+    const matched = permission.find((p) => p.permissionName === roleName);
+
     setForm({
       name: admin.name || "",
-      role: admin.role || "Editor",
+      role: roleName,
+      permissionId: admin.permissionId || matched?.id || "",
       email: admin.email || "",
       mobile: admin.mobile || "",
       password: "",
@@ -156,6 +196,16 @@ export default function AdminUsers() {
 
   const handleChange = (event) => {
     const { name, value } = event.target;
+
+    if (name === "role") {
+      const matched = permission.find((p) => p.permissionName === value);
+      setForm((previous) => ({
+        ...previous,
+        role: value,
+        permissionId: matched?.id || "",
+      }));
+      return;
+    }
 
     setForm((previous) => ({
       ...previous,
@@ -176,7 +226,6 @@ export default function AdminUsers() {
     const mobile = form.mobile.trim();
     const password = form.password;
     const confirmPassword = form.confirmPassword;
-
     if (!name || !email || !mobile || !form.role) {
       setError("Please complete all required fields.");
       return;
@@ -224,6 +273,10 @@ export default function AdminUsers() {
           payload.role = form.role;
         }
 
+        if (form.permissionId) {
+          payload.permissionId = form.permissionId;
+        }
+
         if (password) {
           payload.password = password;
         }
@@ -237,6 +290,7 @@ export default function AdminUsers() {
           action: "add",
           name,
           role: form.role,
+          permissionId: form.permissionId,
           email,
           mobile,
           password,
@@ -252,8 +306,8 @@ export default function AdminUsers() {
           Array.isArray(backendError)
             ? backendError.join(", ")
             : backendError ||
-                result?.message ||
-                "The admin operation failed."
+            result?.message ||
+            "The admin operation failed."
         );
       }
 
@@ -303,8 +357,8 @@ export default function AdminUsers() {
           Array.isArray(backendError)
             ? backendError.join(", ")
             : backendError ||
-                result?.message ||
-                "Unable to delete this admin."
+            result?.message ||
+            "Unable to delete this admin."
         );
       }
 
@@ -562,9 +616,9 @@ export default function AdminUsers() {
                       required
                       disabled={saving}
                     >
-                      {ADMIN_ROLES.map((role) => (
-                        <option key={role} value={role}>
-                          {role}
+                      {permission.map((permission) => (
+                        <option key={permission.id} value={permission.permissionName}>
+                          {permission.permissionName}
                         </option>
                       ))}
                     </select>

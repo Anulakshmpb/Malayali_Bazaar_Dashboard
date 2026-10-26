@@ -22,6 +22,7 @@ const addAdminUserService = async (data, req) => {
     password,
     mobile,
     role,
+    permissionId,
   } = data;
 
   try {
@@ -60,6 +61,7 @@ const addAdminUserService = async (data, req) => {
           email,
           mobile: normalizedMobile,
           role,
+          permissionId,
           status: "active",
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
@@ -133,6 +135,9 @@ const addAdminUserService = async (data, req) => {
       }
       if (role !== undefined) {
         firestoreUpdate.role = role;
+      }
+      if (permissionId !== undefined) {
+        firestoreUpdate.permissionId = permissionId;
       }
       if (password && password.trim()) {
         authUpdate.password = password;

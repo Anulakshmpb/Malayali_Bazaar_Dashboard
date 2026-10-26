@@ -1,26 +1,235 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Link2, Trash2, Loader2, Plus } from 'lucide-react';
+import { ArrowLeft, Link2, Trash2, Loader2, Plus, Search, ImagePlus } from 'lucide-react';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from '../../Config/Firebase';
 
-// Mock AutocompleteBox for the template
-const AutocompleteBox = ({ collectionName, labelField, value, onChange, placeholder, id }) => {
+const ProductAutocomplete = ({ value, onChange, placeholder, id, excludeIds = [] }) => {
+    const [allProducts, setAllProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState(value || '');
+    const [isOpen, setIsOpen] = useState(false);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const wrapperRef = useRef(null);
+    const inputRef = useRef(null);
+    const listRef = useRef(null);
+
+        useEffect(() => {
+        const unsubscribe = onSnapshot(
+            collection(db, 'products'),
+            (snapshot) => {
+                const productsList = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data(),
+                }));
+                setAllProducts(productsList);
+                setLoading(false);
+            },
+            (error) => {
+                console.error('Failed to load products for autocomplete:', error);
+                setLoading(false);
+            }
+        );
+        return unsubscribe;
+    }, []);
+
+    useEffect(() => {
+        setSearchTerm(value || '');
+    }, [value]);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        if (highlightedIndex >= 0 && listRef.current) {
+            const items = listRef.current.querySelectorAll('[data-option]');
+            if (items[highlightedIndex]) {
+                items[highlightedIndex].scrollIntoView({ block: 'nearest' });
+            }
+        }
+    }, [highlightedIndex]);
+
+    const filteredProducts = allProducts.filter(product => {
+        if (excludeIds.includes(product.id)) return false;
+        if (!searchTerm.trim()) return true;
+        const search = searchTerm.trim().toLowerCase();
+        const searchableText = [
+            product.productName,
+            product.brand,
+            product.category,
+            product.subCategory,
+            product.productType,
+            product.productSKU,
+            product.productId,
+        ].filter(Boolean).join(' ').toLowerCase();
+        return searchableText.includes(search);
+    });
+
+    const handleSelect = (product) => {
+        setSearchTerm(product.productName || '');
+        setIsOpen(false);
+        setHighlightedIndex(-1);
+        onChange(product);
+    };
+
+    const handleInputChange = (e) => {
+        const val = e.target.value;
+        setSearchTerm(val);
+        setIsOpen(true);
+        setHighlightedIndex(-1);
+        if (!val.trim()) {
+            onChange(null);
+        }
+    };
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'Escape') {
+            setIsOpen(false);
+            setHighlightedIndex(-1);
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setIsOpen(true);
+            setHighlightedIndex(prev =>
+                prev < filteredProducts.length - 1 ? prev + 1 : 0
+            );
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedIndex(prev =>
+                prev > 0 ? prev - 1 : filteredProducts.length - 1
+            );
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (highlightedIndex >= 0 && filteredProducts[highlightedIndex]) {
+                handleSelect(filteredProducts[highlightedIndex]);
+            }
+        }
+    };
+
+    const getProductImage = (product) => product.thumbnail || product.images?.[0] || '';
+
     return (
-        <select
-            id={id}
-            className="w-full h-[42px] px-3 py-2 border border-slate-200 rounded-xl bg-white text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-            onChange={(e) => {
-                if (e.target.value) {
-                    onChange({ [labelField]: e.target.value });
-                } else {
-                    onChange(null);
-                }
-            }}
-        >
-            <option value="">{placeholder}</option>
-            <option value="Premium Arabica Coffee">Premium Arabica Coffee</option>
-            <option value="Ceramic Coffee Mug">Ceramic Coffee Mug</option>
-            <option value="Organic Matcha Tea">Organic Matcha Tea</option>
-        </select>
+        <div ref={wrapperRef} className="relative">
+            <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search size={15} className="text-slate-400" />
+                </div>
+                <input
+                    ref={inputRef}
+                    id={id}
+                    type="text"
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-haspopup="listbox"
+                    aria-expanded={isOpen}
+                    aria-controls="product-autocomplete-list"
+                    autoComplete="off"
+                    value={searchTerm}
+                    onChange={handleInputChange}
+                    onFocus={() => setIsOpen(true)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={placeholder || 'Search products...'}
+                    className="w-full h-[42px] pl-9 pr-3 py-2 border border-slate-200 rounded-xl bg-white text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-400"
+                />
+            </div>
+
+            {isOpen && (
+                <div
+                    ref={listRef}
+                    id="product-autocomplete-list"
+                    role="listbox"
+                    className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl"
+                    style={{ scrollbarWidth: 'thin' }}
+                >
+                    {loading ? (
+                        <div className="flex items-center justify-center gap-2 py-6 text-sm text-slate-400">
+                            <Loader2 size={16} className="animate-spin" />
+                            <span>Loading products...</span>
+                        </div>
+                    ) : filteredProducts.length === 0 ? (
+                        <div className="py-6 text-center text-sm text-slate-400">
+                            {searchTerm.trim() ? 'No matching products found.' : 'No products available.'}
+                        </div>
+                    ) : (
+                        <div className="p-1">
+                            {filteredProducts.map((product, index) => {
+                                const image = getProductImage(product);
+                                const isHighlighted = index === highlightedIndex;
+                                return (
+                                    <button
+                                        key={product.id}
+                                        type="button"
+                                        role="option"
+                                        data-option
+                                        aria-selected={isHighlighted}
+                                        onClick={() => handleSelect(product)}
+                                        className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors cursor-pointer border-none ${
+                                            isHighlighted
+                                                ? 'bg-indigo-50 ring-1 ring-indigo-200'
+                                                : 'hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        {/* Product Image */}
+                                        <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 shadow-sm">
+                                            {image ? (
+                                                <img
+                                                    src={image}
+                                                    alt=""
+                                                    className="h-full w-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="flex h-full w-full items-center justify-center text-slate-300">
+                                                    <ImagePlus size={18} />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Product Details */}
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-sm font-semibold text-slate-800">
+                                                {product.productName || 'Unnamed Product'}
+                                            </p>
+                                            <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                                                {product.brand && product.brand !== 'general' && (
+                                                    <span className="inline-flex items-center text-[11px] font-medium text-slate-500">
+                                                        <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-indigo-400"></span>
+                                                        {product.brand}
+                                                    </span>
+                                                )}
+                                                {product.category && product.category !== 'general' && (
+                                                    <span className="inline-flex items-center text-[11px] font-medium text-slate-500">
+                                                        <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                                                        {product.category}
+                                                    </span>
+                                                )}
+                                                {product.subCategory && product.subCategory !== 'general' && (
+                                                    <span className="inline-flex items-center text-[11px] font-medium text-slate-500">
+                                                        <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-amber-400"></span>
+                                                        {product.subCategory}
+                                                    </span>
+                                                )}
+                                                {product.productType && product.productType !== 'general' && (
+                                                    <span className="inline-flex items-center text-[11px] font-medium text-slate-500">
+                                                        <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-rose-400"></span>
+                                                        {product.productType}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
     );
 };
 
@@ -53,16 +262,13 @@ export default function ViewSection() {
             image: "https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&h=200" 
         }
     ]);
-
-    // Form State
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [addingProduct, setAddingProduct] = useState(false);
     const [loadingProducts] = useState(false);
 
-    // Handlers
-    const handleRemoveCategory = (cat) => {
-        setCategories(categories.filter(c => c.id !== cat.id));
-    };
+    // const handleRemoveCategory = (cat) => {
+    //     setCategories(categories.filter(c => c.id !== cat.id));
+    // };
 
     const handleRemoveProduct = (prod) => {
         setProducts(products.filter(p => p.id !== prod.id));
@@ -72,17 +278,11 @@ export default function ViewSection() {
         e.preventDefault();
         if (selectedProduct) {
             setAddingProduct(true);
-            const productImages = {
-                "Premium Arabica Coffee": "https://images.unsplash.com/photo-1559525839-b184a4d698c7?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&h=200",
-                "Ceramic Coffee Mug": "https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&h=200",
-                "Organic Matcha Tea": "https://images.unsplash.com/photo-1589363460779-fd4be9b64b38?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&h=200"
-            };
-            // Simulate network request
             setTimeout(() => {
                 const newProduct = {
-                    id: Date.now(),
+                    id: selectedProduct.id || Date.now(),
                     productName: selectedProduct.productName,
-                    image: productImages[selectedProduct.productName] || "https://images.unsplash.com/photo-1559525839-b184a4d698c7?auto=format&fit=crop&w=200&h=200"
+                    image: selectedProduct.thumbnail || selectedProduct.images?.[0] || ''
                 };
                 setProducts([...products, newProduct]);
                 setAddingProduct(false);
@@ -90,6 +290,8 @@ export default function ViewSection() {
             }, 500);
         }
     };
+
+    const excludeProductIds = products.map(p => p.id);
 
     return (
         <div className="min-h-screen bg-white pb-10 page-container">
@@ -112,7 +314,7 @@ export default function ViewSection() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Category Linker Card */}
-                <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col gap-6">
+                {/* <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col gap-6">
                     <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                         <div className="flex items-center gap-3">
                             <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
@@ -172,7 +374,7 @@ export default function ViewSection() {
                                 </tbody>
                             </table>
                         </div>
-                </div>
+                </div> */}
 
                 {/* Product Linker Card */}
                 <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col gap-6">
@@ -191,13 +393,12 @@ export default function ViewSection() {
                     <form onSubmit={handleAddProduct} className="flex gap-3 items-end">
                         <div className="flex-1 space-y-2">
                             <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Select Product</label>
-                            <AutocompleteBox
-                                collectionName="products"
-                                labelField="productName"
+                            <ProductAutocomplete
                                 value={selectedProduct ? (selectedProduct.productName || '') : ''}
-                                onChange={(item) => setSelectedProduct(item)}
-                                placeholder="Search products..."
+                                onChange={(product) => setSelectedProduct(product)}
+                                placeholder="Search by name, brand, category..."
                                 id="products-select"
+                                excludeIds={excludeProductIds}
                             />
                         </div>
                         <button
@@ -268,6 +469,6 @@ export default function ViewSection() {
                 </div>
             </div>
         </div>
-         </div>
+    </div>
     );
 }

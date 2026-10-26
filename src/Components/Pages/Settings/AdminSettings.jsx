@@ -62,19 +62,16 @@ export default function AdminSettings() {
     const [selectedRoutes, setSelectedRoutes] = useState([]);
     const [searchTerm, setSearchTerm] = useState("");
 
-    // Must match the region where the callable is deployed.
     const functions = useMemo(
         () => getFunctions(app, "europe-west1"),
         []
     );
 
-    // FIX: the deployed callable is managePermission, not editPermissions.
     const managePermissionCallable = useMemo(
         () => httpsCallable(functions, "managePermission"),
         [functions]
     );
 
-    // Load permissions from Firestore.
     useEffect(() => {
         const permissionsQuery = query(
             collection(db, "permissions"),
@@ -182,7 +179,6 @@ export default function AdminSettings() {
         );
     };
 
-    // Create or update a role's page permissions.
     const handleSave = async (event) => {
         event.preventDefault();
 
@@ -233,7 +229,6 @@ export default function AdminSettings() {
             return;
         }
 
-        // Preserve the existing request contract.
         const request = {
             action: editingPermission ? "update" : "add",
             permissionName: name,
@@ -283,7 +278,6 @@ export default function AdminSettings() {
         }
     };
 
-    // Delete a role through the same callable.
     const handleDelete = async (permission) => {
         if (!permission?.id || saving) return;
 

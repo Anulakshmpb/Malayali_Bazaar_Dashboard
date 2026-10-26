@@ -10,23 +10,22 @@ export const adminLogin = async (email, password) => {
         const user = userCredential.user;
         const adminRef = doc(db, 'adminUsers', user.uid);
         const adminSnap = await getDoc(adminRef);
-
-        if (!adminSnap.exists()) {
-            await signOut(auth);
-            return {
-                success: false,
-                error: 'Access denied. Admin only.',
-            };
-        }
+        // if (!adminSnap.exists()) {
+        //     await signOut(auth);
+        //     return {
+        //         success: false,
+        //         error: 'Access denied. Admin only.',
+        //     };
+        // }
         
-        const adminData = adminSnap.data();
-        if (adminData.uid !== user.uid) {
-            await signOut(auth);
-            return {
-                success: false,
-                error: 'Account disabled. Contact admin.',
-            };
-        }
+        // const adminData = adminSnap.data();
+        // if (adminData.uid !== user.uid) {
+        //     await signOut(auth);
+        //     return {
+        //         success: false,
+        //         error: 'Account disabled. Contact admin.',
+        //     };
+        // }
         
         return {
             success: true,
