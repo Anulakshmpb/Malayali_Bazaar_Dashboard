@@ -109,7 +109,6 @@ export default function AdminUsers() {
 
 
   useEffect(() => {
-    setLoading(true);
     const permissionRef = collection(db, "permissions");
     const unsubscribe = onSnapshot(
       permissionRef,
@@ -120,21 +119,18 @@ export default function AdminUsers() {
             ...document.data(),
           }))
           .sort((a, b) =>
-            String(a.name || "").localeCompare(
-              String(b.name || "")
+            String(a.permissionName || a.roleName || "").localeCompare(
+              String(b.permissionName || b.roleName || "")
             )
           );
 
         setPermission(permissionList);
-        setLoading(false);
-        setError("");
       },
       (err) => {
         console.error("Failed to load permissions:", err);
         setError(
           "Unable to load permissions. Check your Firestore permissions."
         );
-        setLoading(false);
       }
     );
 
@@ -167,7 +163,17 @@ export default function AdminUsers() {
 
   const openAddForm = () => {
     setEditingAdmin(null);
-    setForm(INITIAL_FORM);
+    const defaultPermission = permission[0];
+    const defaultRole = defaultPermission
+      ? (defaultPermission.permissionName || defaultPermission.roleName || "")
+      : "";
+    const defaultPermissionId = defaultPermission?.id || "";
+
+    setForm({
+      ...INITIAL_FORM,
+      role: defaultRole,
+      permissionId: defaultPermissionId,
+    });
     setError("");
     setSuccess("");
     setAdminForm(true);
@@ -176,13 +182,21 @@ export default function AdminUsers() {
   const handleEdit = (admin) => {
     setEditingAdmin(admin);
 
-    const roleName = admin.role || "Editor";
-    const matched = permission.find((p) => p.permissionName === roleName);
+    const roleName = admin.role || "";
+    const matched = permission.find(
+      (p) =>
+        p.id === admin.permissionId ||
+        (p.permissionName || p.roleName) === roleName
+    );
+
+    const resolvedRole =
+      roleName || matched?.permissionName || matched?.roleName || "";
+    const resolvedPermissionId = admin.permissionId || matched?.id || "";
 
     setForm({
       name: admin.name || "",
-      role: roleName,
-      permissionId: admin.permissionId || matched?.id || "",
+      role: resolvedRole,
+      permissionId: resolvedPermissionId,
       email: admin.email || "",
       mobile: admin.mobile || "",
       password: "",
@@ -198,7 +212,11 @@ export default function AdminUsers() {
     const { name, value } = event.target;
 
     if (name === "role") {
-      const matched = permission.find((p) => p.permissionName === value);
+      const matched = permission.find(
+        (p) =>
+          (p.permissionName || p.roleName) === value ||
+          p.id === value
+      );
       setForm((previous) => ({
         ...previous,
         role: value,
@@ -616,11 +634,22 @@ export default function AdminUsers() {
                       required
                       disabled={saving}
                     >
-                      {permission.map((permission) => (
-                        <option key={permission.id} value={permission.permissionName}>
-                          {permission.permissionName}
-                        </option>
-                      ))}
+                      <option value="" disabled>
+                        {permission.length === 0
+                          ? "No roles available"
+                          : "Select a role"}
+                      </option>
+                      {permission.map((perm) => {
+                        const roleTitle =
+                          perm.permissionName ||
+                          perm.roleName ||
+                          "Unnamed Role";
+                        return (
+                          <option key={perm.id} value={roleTitle}>
+                            {roleTitle}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
                 </div>

@@ -28,6 +28,7 @@ export default function CommonTable({
     rowKey = "id",
     actions = null,
     headerActions = null,
+    toolbarActions = null,
     initialPageSize = 10,
     pageSizeOptions = [10, 25, 50, 100],
     showSearch = true,
@@ -72,7 +73,7 @@ export default function CommonTable({
         onQueryChange,
     ]);
 
-    const sourceData = Array.isArray(data) ? data : [];
+    const sourceData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
     const clientRows = useMemo(() => {
         if (!clientSide) return sourceData;
 
@@ -260,14 +261,14 @@ export default function CommonTable({
 
                 {headerActions && (
                     <div className="flex flex-wrap items-center gap-2">
-                        {headerActions}
+                        {typeof headerActions === "function" ? headerActions() : headerActions}
                     </div>
                 )}
             </div>
 
 
             {/* Search toolbar */}
-            {(showSearch || (headerActions && !showSearch)) && (
+            {(showSearch || toolbarActions) && (
                 <div className="flex flex-col gap-3 border-b border-tertiary/30 bg-white px-5 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
                     <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center md:max-w-xl">
                         {showSearch && (
@@ -303,9 +304,9 @@ export default function CommonTable({
                         )}
                     </div>
 
-                    {headerActions && (
+                    {toolbarActions && (
                         <div className="flex flex-wrap items-center gap-2">
-                            {headerActions}
+                            {typeof toolbarActions === "function" ? toolbarActions() : toolbarActions}
                         </div>
                     )}
                 </div>
@@ -353,8 +354,8 @@ export default function CommonTable({
                                                 type="button"
                                                 onClick={() => handleSort(column)}
                                                 className={`inline-flex items-center gap-2 rounded-md text-left transition-colors hover:text-primary focus:outline-none focus:text-primary ${isSorted
-                                                        ? "text-primary"
-                                                        : ""
+                                                    ? "text-primary"
+                                                    : ""
                                                     }`}
                                             >
                                                 {column.header}
@@ -411,8 +412,8 @@ export default function CommonTable({
                                             >
                                                 <div
                                                     className={`h-3 rounded-md bg-slate-200 ${colIndex % 2 === 0
-                                                            ? "w-28"
-                                                            : "w-36"
+                                                        ? "w-28"
+                                                        : "w-36"
                                                         }`}
                                                 />
                                             </td>
@@ -584,8 +585,8 @@ export default function CommonTable({
                                 aria-current={page === number ? "page" : undefined}
                                 onClick={() => setPage(number)}
                                 className={`${buttonBase} h-9 min-w-9 px-2.5 text-xs font-semibold ${page === number
-                                        ? "border-primary bg-primary text-white shadow-sm shadow-primary/20"
-                                        : "border-tertiary/50 bg-white text-secondary hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+                                    ? "border-primary bg-primary text-white shadow-sm shadow-primary/20"
+                                    : "border-tertiary/50 bg-white text-secondary hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
                                     }`}
                             >
                                 {number}
