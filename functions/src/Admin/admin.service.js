@@ -63,7 +63,7 @@ const addAdminUserService = async (data, req) => {
           email,
           mobile: normalizedMobile,
           role,
-          permissionId,
+          permissionId: permissionId || "",
           status: "active",
           uid: uid,
           createdAt: FieldValue.serverTimestamp(),

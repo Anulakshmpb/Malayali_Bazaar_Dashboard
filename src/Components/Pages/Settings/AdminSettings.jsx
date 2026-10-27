@@ -87,6 +87,7 @@ export default function AdminSettings() {
                         ...document.data(),
                     }))
                 );
+                console.log(permissions)
                 setLoading(false);
             },
             (error) => {
@@ -434,13 +435,12 @@ export default function AdminSettings() {
                             render: (permission) => {
                                 const access = getAccessLevel(permission);
                                 return (
-                                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${
-                                        access === "Full Access"
-                                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                            : access === "Partial Access"
-                                                ? "border-blue-200 bg-blue-50 text-blue-700"
-                                                : "border-slate-200 bg-slate-100 text-slate-600"
-                                    }`}>
+                                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${access === "Full Access"
+                                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                        : access === "Partial Access"
+                                            ? "border-blue-200 bg-blue-50 text-blue-700"
+                                            : "border-slate-200 bg-slate-100 text-slate-600"
+                                        }`}>
                                         {access}
                                     </span>
                                 );
@@ -614,8 +614,8 @@ export default function AdminSettings() {
                                                     key={route.path}
                                                     htmlFor={`module-${index}`}
                                                     className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition ${selectedRoutes.includes(route.path)
-                                                            ? "border-primary/50 bg-tertiary/10"
-                                                            : "border-tertiary/40 hover:bg-slate-50"
+                                                        ? "border-primary/50 bg-tertiary/10"
+                                                        : "border-tertiary/40 hover:bg-slate-50"
                                                         }`}
                                                 >
                                                     <input

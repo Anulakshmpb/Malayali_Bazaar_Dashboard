@@ -9,8 +9,8 @@ import Joi from "joi";
 const addSchema = Joi.object({
   action: Joi.string().valid("add").default("add"),
   name: Joi.string().trim().min(2).max(100).required(),
-  role: Joi.string().trim().valid("Super Admin", "Manager Admin", "Editor").required(),
-  permissionId: Joi.string().trim(),
+  role: Joi.string().trim().min(2).max(100).required(),
+  permissionId: Joi.string().trim().allow("", null),
   email: Joi.string().trim().email().lowercase().required(),
   password: Joi.string().min(6).max(128).required(),
   mobile: Joi.string().trim().pattern(/^\+?[0-9\s()-]{7,20}$/).required(),
@@ -20,12 +20,12 @@ const updateSchema = Joi.object({
   action: Joi.string().valid("update").required(),
   id: Joi.string().trim().required(),
   name: Joi.string().trim().min(2).max(100),
-  role: Joi.string().trim().valid("Super Admin", "Manager Admin", "Editor"),
-  permissionId: Joi.string().trim(),
+  role: Joi.string().trim().min(2).max(100),
+  permissionId: Joi.string().trim().allow("", null),
   email: Joi.string().trim().email().lowercase(),
   password: Joi.string().min(6).max(128).allow(""),
   mobile: Joi.string().trim().pattern(/^\+?[0-9\s()-]{7,20}$/),
-}).or("name", "role", "email", "password", "mobile");
+}).or("name", "role", "email", "password", "mobile", "permissionId");
 
 const deleteAdminSchema = Joi.object({
   action: Joi.string().valid("delete").required(),
@@ -52,13 +52,13 @@ export const addAdminValidator = (data = {}) => {
       };
   }
 
-  const {error, value} = schema.validate(
-      {...data, action},
-      {
-        abortEarly: false,
-        stripUnknown: true,
-        convert: true,
-      },
+  const { error, value } = schema.validate(
+    { ...data, action },
+    {
+      abortEarly: false,
+      stripUnknown: true,
+      convert: true,
+    },
   );
 
   if (error) {
@@ -119,13 +119,13 @@ export const addPermissionsValidator = (data = {}) => {
       };
   }
 
-  const {error, value} = schema.validate(
-      {...data, action},
-      {
-        abortEarly: false,
-        stripUnknown: true,
-        convert: true,
-      },
+  const { error, value } = schema.validate(
+    { ...data, action },
+    {
+      abortEarly: false,
+      stripUnknown: true,
+      convert: true,
+    },
   );
   if (error) {
     return {
@@ -151,13 +151,13 @@ const addUserSchema = Joi.object({
   name: Joi.string().trim().min(2).max(100).required(),
 });
 export const addUserValidator = (data = {}) => {
-  const {error, value} = addUserSchema.validate(
-      data,
-      {
-        abortEarly: false,
-        stripUnknown: true,
-        convert: true,
-      },
+  const { error, value } = addUserSchema.validate(
+    data,
+    {
+      abortEarly: false,
+      stripUnknown: true,
+      convert: true,
+    },
   );
   if (error) {
     return {
