@@ -10,6 +10,7 @@ const brands = db.collection("brand");
 const productTypes = db.collection("productTypes");
 const deliveryCharges = db.collection("deliveryCharges");
 const banners = db.collection("banners");
+const sections = db.collection("sections");
 // Common helpers
 const validate = (schema, data) => {
   const {error, value} = schema.validate(data, {
@@ -617,6 +618,7 @@ const bannerSchema = Joi.object({
   linkText: Joi.string().trim().allow("").optional(),
   link: Joi.string().trim().allow("").optional(),
   type: Joi.string().trim().allow("").optional(),
+  order: Joi.number().integer().min(1).optional(),
   whatsappNo: Joi.string().trim().allow("").optional(),
   whatsappMessage: Joi.string().trim().allow("").optional(),
   mainBanner: Joi.boolean().optional(),
@@ -713,6 +715,7 @@ export const manageBanner = callableWrapper(async (req) => {
       linkText,
       link,
       type,
+      order,
       whatsappNo,
       whatsappMessage,
       mainBanner,
@@ -744,6 +747,7 @@ export const manageBanner = callableWrapper(async (req) => {
       ...(linkText !== undefined && {linkText}),
       ...(link !== undefined && {link}),
       ...(type !== undefined && {type}),
+      ...(order !== undefined && {order}),
       ...(whatsappNo !== undefined && {whatsappNo}),
       ...(whatsappMessage !== undefined && {whatsappMessage}),
 
@@ -937,5 +941,197 @@ export const manageDeliveryCharge = callableWrapper(async (req) => {
     };
   } catch (error) {
     return fail(error, "Unit of measure operation failed");
+  }
+});
+// =====================================================
+// 4. SECTION MANAGEMENT
+// =====================================================
+
+const sectionSchema = Joi.object({
+  sectionId: Joi.string().trim().allow("", null).optional(),
+
+  sectionName: Joi.string().trim().required(),
+
+  order: Joi.number().integer().required(),
+
+  products: Joi.array()
+      .items(
+          Joi.object({
+            id: Joi.string().trim().allow("").optional(),
+            name: Joi.string().trim().required(),
+          }).unknown(false),
+      )
+      .optional(),
+});
+
+export const manageSection = callableWrapper(async (req) => {
+  try {
+    requireAuth(req);
+
+    const action = getAction(req);
+    const fields = getFields(req);
+
+    // =====================================================
+    // LIST SECTIONS
+    // =====================================================
+    if (action === "list") {
+      let query = sections.orderBy("order", "asc");
+
+      if (fields.sectionId) {
+        query = sections.where("sectionId", "==", fields.sectionId);
+      }
+      const snapshot = await query.get();
+      return {
+        success: true,
+        data: snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })),
+      };
+    }
+
+    // =====================================================
+    // DELETE SECTION
+    // =====================================================
+    if (action === "delete") {
+      const {sectionId} = fields;
+
+      if (
+        typeof sectionId !== "string" ||
+        !sectionId.trim()
+      ) {
+        return {
+          success: false,
+          message: "sectionId is required",
+        };
+      }
+
+      const sectionRef = sections.doc(sectionId.trim());
+      const sectionDoc = await sectionRef.get();
+
+      if (!sectionDoc.exists) {
+        return {
+          success: false,
+          message: "Section not found",
+        };
+      }
+
+      await sectionRef.delete();
+
+      return {
+        success: true,
+        sectionId: sectionRef.id,
+        message: "Section deleted successfully",
+      };
+    }
+
+    // =====================================================
+    // VALIDATE ACTION
+    // =====================================================
+    if (action !== "add" && action !== "update") {
+      return {
+        success: false,
+        message: "Invalid section action",
+      };
+    }
+
+    // =====================================================
+    // VALIDATE ADD / UPDATE DATA
+    // =====================================================
+    const result = validate(sectionSchema, fields);
+
+    if (!result.success) {
+      return result;
+    }
+
+    const {
+      sectionId,
+      sectionName,
+      order,
+      products,
+    } = result.data;
+
+    if (action === "update" && !sectionId) {
+      return {
+        success: false,
+        message: "sectionId is required for update",
+      };
+    }
+
+    const searchKey = sectionName.toLowerCase();
+
+    // =====================================================
+    // CHECK DUPLICATE SECTION NAME
+    // =====================================================
+    const duplicateSnapshot = await sections
+        .where("searchKey", "==", searchKey)
+        .get();
+
+    const duplicate = duplicateSnapshot.docs.find(
+        (doc) => doc.id !== sectionId,
+    );
+
+    if (duplicate) {
+      return {
+        success: false,
+        message: "Section name already exists",
+      };
+    }
+
+    // =====================================================
+    // UPDATE SECTION
+    // =====================================================
+    if (action === "update") {
+      const sectionRef = sections.doc(sectionId);
+      const sectionDoc = await sectionRef.get();
+
+      if (!sectionDoc.exists) {
+        return {
+          success: false,
+          message: "Section not found",
+        };
+      }
+
+      const updateData = {
+        sectionName,
+        searchKey,
+        order,
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+      if (products !== undefined) {
+        updateData.products = products;
+      }
+      await sectionRef.update(updateData);
+      return {
+        success: true,
+        sectionId,
+        message: "Section updated successfully",
+      };
+    }
+
+    // =====================================================
+    // ADD SECTION
+    // =====================================================
+    if (action === "add") {
+      const sectionRef = sections.doc();
+
+      await sectionRef.set({
+        sectionId: sectionRef.id,
+        sectionName,
+        searchKey,
+        order,
+        products: products ?? [],
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      return {
+        success: true,
+        sectionId: sectionRef.id,
+        message: "Section added successfully",
+      };
+    }
+  } catch (error) {
+    return fail(error, "Section operation failed");
   }
 });

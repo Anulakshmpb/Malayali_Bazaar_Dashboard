@@ -34,6 +34,7 @@ const INITIAL_FORM_DATA = {
     date: '',
     linkText: '',
     link: '',
+    order: '',
     type: 'blank',
     whatsapp_number: '',
     whatsappMessage: '',
@@ -170,6 +171,7 @@ export default function Banner() {
                 date: formData.date,
                 linkText: formData.linkText,
                 link: formData.link,
+                order: formData.order,
                 type: formData.type,
                 whatsappNo: formData.whatsapp_number,
                 whatsappMessage: formData.whatsappMessage,
@@ -296,74 +298,75 @@ export default function Banner() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                    {filteredBanners.map((banner) => (
-                        <div key={banner.id} className="group relative overflow-hidden rounded-2xl border border-tertiary/40 bg-white shadow-sm transition-all hover:shadow-lg hover:border-tertiary/60 flex flex-col">
-                            {/* Banner Image */}
-                            <div className="relative h-28 w-full overflow-hidden bg-slate-100">
-                                <img
-                                    src={banner.desktop_img_url}
-                                    alt={banner.title}
-                                    className={`h-full w-full object-cover transition-transform duration-700 group-hover:scale-105 ${!banner.status ? 'grayscale opacity-70' : ''}`}
-                                />
-                                <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                        {filteredBanners.map((banner) => (
+                            <div key={banner.id} className="group relative overflow-hidden rounded-2xl border border-tertiary/40 bg-white shadow-sm transition-all hover:shadow-lg hover:border-tertiary/60 flex flex-col">
+                                {/* Banner Image */}
+                                <div className="relative h-28 w-full overflow-hidden bg-slate-100">
+                                    <img
+                                        src={banner.desktop_img_url}
+                                        alt={banner.title}
+                                        className={`h-full w-full object-cover transition-transform duration-700 group-hover:scale-105 ${!banner.status ? 'grayscale opacity-70' : ''}`}
+                                    />
+                                    <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
 
-                                <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setFormData({
-                                                ...INITIAL_FORM_DATA,
-                                                ...banner,
-                                                desktop_img_url: banner.desktop_img_url || banner.image || '',
-                                                title: banner.title || banner.tittle || '',
-                                                subtitle: banner.subtitle || banner.tagSubtitle || '',
-                                                whatsapp_number: banner.whatsapp_number || banner.whatsappNo || '',
-                                                whatsappMessage: banner.whatsappMessage || '',
-                                                isMainBanner: Boolean(banner.isMainBanner ?? banner.mainBanner),
-                                            });
-                                            setEditingBannerId(banner.id);
-                                            setDesktopImageFile(null);
-                                            setIsModalOpen(true);
-                                        }}
-                                        className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/95 text-gray-900 shadow-lg backdrop-blur transition hover:bg-white hover:text-primary focus:outline-none"
-                                    >
-                                        <Edit size={16} />
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleDelete(banner)}
-                                        title="Delete banner"
-                                        className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/95 text-rose-500 shadow-lg backdrop-blur transition hover:bg-rose-50 hover:text-rose-600 focus:outline-none"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Card Body */}
-                            <div className="flex flex-col p-5 flex-1 bg-white">
-                                <div className="flex items-start justify-between gap-4">
-                                    <div>
-                                        <span className="inline-flex items-center justify-center rounded-md border border-tertiary/60 bg-slate-50 px-2 py-0.5 text-xs font-bold text-gray-900 shadow-sm mb-2">
-                                            {banner.tag}
-                                        </span>
-                                        <h3 className="text-lg font-bold text-gray-900">{banner.title}</h3>
+                                    <div className="absolute top-3 right-3 flex gap-2 opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setFormData({
+                                                    ...INITIAL_FORM_DATA,
+                                                    ...banner,
+                                                    desktop_img_url: banner.desktop_img_url || banner.image || '',
+                                                    title: banner.title || banner.tittle || '',
+                                                    subtitle: banner.subtitle || banner.tagSubtitle || '',
+                                                    order: banner.order || '',
+                                                    whatsapp_number: banner.whatsapp_number || banner.whatsappNo || '',
+                                                    whatsappMessage: banner.whatsappMessage || '',
+                                                    isMainBanner: Boolean(banner.isMainBanner ?? banner.mainBanner),
+                                                });
+                                                setEditingBannerId(banner.id);
+                                                setDesktopImageFile(null);
+                                                setIsModalOpen(true);
+                                            }}
+                                            className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/95 text-gray-900 shadow-lg backdrop-blur transition hover:bg-white hover:text-primary focus:outline-none"
+                                        >
+                                            <Edit size={16} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDelete(banner)}
+                                            title="Delete banner"
+                                            className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/95 text-rose-500 shadow-lg backdrop-blur transition hover:bg-rose-50 hover:text-rose-600 focus:outline-none"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
                                     </div>
+                                </div>
 
-                                    <label className="relative inline-flex items-center cursor-pointer mt-1">
-                                        <input
-                                            type="checkbox"
-                                            className="sr-only peer"
-                                            checked={Boolean(banner.status)}
-                                            onChange={() => toggleVisibility(banner)}
-                                        />
-                                        <div className="h-6 w-11 rounded-full bg-slate-200 shadow-inner peer-focus:outline-none peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                                    </label>
+                                {/* Card Body */}
+                                <div className="flex flex-col p-5 flex-1 bg-white">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div>
+                                            <span className="inline-flex items-center justify-center rounded-md border border-tertiary/60 bg-slate-50 px-2 py-0.5 text-xs font-bold text-gray-900 shadow-sm mb-2">
+                                                {banner.tag}
+                                            </span>
+                                            <h3 className="text-lg font-bold text-gray-900">{banner.title}</h3>
+                                        </div>
+
+                                        <label className="relative inline-flex items-center cursor-pointer mt-1">
+                                            <input
+                                                type="checkbox"
+                                                className="sr-only peer"
+                                                checked={Boolean(banner.status)}
+                                                onChange={() => toggleVisibility(banner)}
+                                            />
+                                            <div className="h-6 w-11 rounded-full bg-slate-200 shadow-inner peer-focus:outline-none peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
                 )}
             </div>
 
@@ -543,7 +546,7 @@ export default function Banner() {
                                         </div> */}
                                     </div>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-900 mb-2">Tag</label>
                                             <input type="text" name="tag" className="w-full rounded-lg border border-tertiary/60 bg-slate-50 px-4 py-2.5 text-sm font-medium text-gray-900 outline-none transition placeholder:text-secondary/50 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10" placeholder="e.g. ⚡ Online Exclusive" value={formData.tag} onChange={handleChange} />
@@ -564,21 +567,26 @@ export default function Banner() {
                                             <label className="block text-sm font-semibold text-gray-900 mb-2">Link Text</label>
                                             <input type="text" name="linkText" className="w-full rounded-lg border border-tertiary/60 bg-slate-50 px-4 py-2.5 text-sm font-medium text-gray-900 outline-none transition placeholder:text-secondary/50 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10" placeholder="e.g. Shop Now" value={formData.linkText} onChange={handleChange} />
                                         </div>
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-900 mb-2">Order</label>
+                                            <input type="number" name="order" className="w-full rounded-lg border border-tertiary/60 bg-slate-50 px-4 py-2.5 text-sm font-medium text-gray-900 outline-none transition placeholder:text-secondary/50 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10" placeholder="e.g. 1" value={formData.order} onChange={handleChange} />
+                                        </div>
                                     </div>
 
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-900 mb-2">Link</label>
-                                        <input
-                                            type="url"
-                                            name="link"
-                                            className="w-full rounded-lg border border-tertiary/60 bg-slate-50 px-4 py-2.5 text-sm font-medium text-gray-900 outline-none transition placeholder:text-secondary/50 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10"
-                                            placeholder="https://example.com"
-                                            value={formData.link}
-                                            onChange={handleChange}
-                                        />
-                                    </div>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-900 mb-2">Link</label>
+                                            <input
+                                                type="url"
+                                                name="link"
+                                                className="w-full rounded-lg border border-tertiary/60 bg-slate-50 px-4 py-2.5 text-sm font-medium text-gray-900 outline-none transition placeholder:text-secondary/50 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10"
+                                                placeholder="https://example.com"
+                                                value={formData.link}
+                                                onChange={handleChange}
+                                            />
+                                        </div>
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-900 mb-2">Type</label>
                                             <select

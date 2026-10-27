@@ -1,16 +1,16 @@
 
 /* eslint-disable max-len */
-import {onCall} from "firebase-functions/v2/https";
-import {logError} from "./logger.js";
+import {onCall, HttpsError} from "firebase-functions/v2/https";
+import {logger} from "firebase-functions";
 
 export const callableWrapper = (handler) => {
   return onCall({region: "europe-west1"}, async (req) => {
     try {
       if (!req.auth) {
-        return {
-          success: false,
-          error: "Unauthorized: You must be logged in to perform this action.",
-        };
+        throw new HttpsError(
+            "unauthenticated",
+            "You must be logged in to perform this action.",
+        );
       }
 
       const result = await handler(req);
@@ -28,12 +28,19 @@ export const callableWrapper = (handler) => {
 
       return result;
     } catch (error) {
-      logError(error);
+      logger.error("Callable function failed", {
+        message: error.message,
+        stack: error.stack,
+      });
 
-      return {
-        success: false,
-        error: error.message || "An unknown error occurred.",
-      };
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+
+      throw new HttpsError(
+          "internal",
+          error.message || "An unknown server error occurred.",
+      );
     }
   });
 };

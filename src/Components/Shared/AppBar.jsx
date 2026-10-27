@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -20,6 +20,9 @@ import {
   Boxes
 } from "lucide-react";
 import { adminLogout } from '../Pages/Auth/services/auth.api';
+import { auth, db } from "../Config/Firebase";
+import { collection, onSnapshot } from "firebase/firestore";
+import { FaArrowLeft } from "react-icons/fa";
 
 function AppBar({ children }) {
   const location = useLocation();
@@ -27,7 +30,18 @@ function AppBar({ children }) {
 
   const [expandedMenus, setExpandedMenus] = useState({});
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate("/dashboard");
+    }
+  };
   const toggleSubMenu = (menuName) => {
     setExpandedMenus((prev) => ({
       ...prev,
@@ -119,7 +133,7 @@ function AppBar({ children }) {
           path: "/customer-ledger",
           icon: Layers,
         },
-          {
+        {
           name: "Delivery Charges",
           path: "/delivery-charges",
           icon: Truck,
@@ -240,7 +254,46 @@ function AppBar({ children }) {
       console.error('Logout error:', error);
     }
   };
-  
+
+  useEffect(() => {
+    setLoading(true);
+    const user = auth.currentUser;
+    if (!user) {
+      console.error("No authenticated user found.");
+      return;
+    }
+    const adminsRef = collection(db, "adminUsers");
+    const unsubscribe = onSnapshot(
+      adminsRef,
+      (snapshot) => {
+        const adminList = snapshot.docs
+          .map((document) => ({
+            id: document.id,
+            ...document.data(),
+          }))
+          .filter((admin) => admin.uid === user.uid)
+          .sort((a, b) =>
+            String(a.name || "").localeCompare(
+              String(b.name || "")
+            )
+          );
+
+        setAdminUsers(adminList);
+        setLoading(false);
+        setError("");
+      },
+      (err) => {
+        console.error("Failed to load admin users:", err);
+        console.log(user.uid)
+        setError(
+          "Unable to load administrators. Check your Firestore permissions."
+        );
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
   return (
     <>
       {/* =====================================================
@@ -261,11 +314,11 @@ function AppBar({ children }) {
                 className="flex items-center gap-2"
               >
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary font-bold text-white">
-                  A
+                  {adminUsers.name && adminUsers.name.charAt(0).toUpperCase() || "A"}
                 </div>
 
                 <span className="hidden font-jakarta text-[19px] font-bold text-gray-900 sm:block">
-                  Admin Panel
+                  {adminUsers.name || "Admin Panel"}
                 </span>
               </NavLink>
             </div>
@@ -296,13 +349,25 @@ function AppBar({ children }) {
               TOP NAVIGATION
           ================================================== */}
           <nav className={`hidden flex-1 items-center gap-1 lg:flex transition-all duration-300 ease-in-out ${sidebarOpen ? "ms-5 lg:ms-8" : "ms-5"}`}>
-
+            <button
+              type="button"
+              onClick={handleBack}
+              aria-label="Go back"
+              title="Go back"
+              className={`inline-flex items-center justify-center gap-2
+        rounded-lg border border-gray-200 bg-white px-3 py-2
+        text-sm font-medium text-gray-700 shadow-sm
+        transition hover:bg-gray-50 hover:text-gray-900
+        focus:outline-none focus:ring-2 focus:ring-gray-300
+        `}
+            >
+              <FaArrowLeft size={14} />
+              <span>Back</span>
+            </button>
             {topNavItems.map((item) => {
               const hasSubItems =
                 item.subItems && item.subItems.length > 0;
-
               const active = isParentActive(item);
-
               if (hasSubItems) {
                 return (
                   <div
@@ -429,17 +494,17 @@ function AppBar({ children }) {
 
                 {/* Avatar */}
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-tertiary/30 text-sm font-semibold text-gray-900">
-                  A
+                  {adminUsers.name && adminUsers.name.charAt(0).toUpperCase() || "A"}
                 </div>
 
                 {/* User */}
                 <div className="hidden text-left xl:block">
                   <p className="font-inter text-[13px] font-semibold text-gray-900">
-                    Admin
+                    {adminUsers.name || "Admin"}
                   </p>
 
                   <p className="font-inter text-[11px] text-gray-500">
-                    Administrator
+                    {adminUsers.role || "Administrator"}
                   </p>
                 </div>
 
@@ -466,7 +531,7 @@ function AppBar({ children }) {
               <div
                 className="invisible absolute right-0 top-[calc(100%+8px)] z-50 w-56 translate-y-1 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 opacity-0 shadow-xl transition-all duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100"
               >
-                <NavLink
+                {/* <NavLink
                   to="/profile"
                   className={({ isActive }) =>
                     `flex items-center gap-3 rounded-lg px-3 py-2 font-inter text-[13px] font-medium transition ${isActive
@@ -496,7 +561,7 @@ function AppBar({ children }) {
                   </svg>
 
                   <span>Profile</span>
-                </NavLink>
+                </NavLink> */}
 
                 <button
                   type="button"

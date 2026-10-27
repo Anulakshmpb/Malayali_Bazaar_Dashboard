@@ -143,3 +143,30 @@ export const addPermissionsValidator = (data = {}) => {
     data: value,
   };
 };
+// ================ USER VALIDATION ================ //
+
+const addUserSchema = Joi.object({
+  uid: Joi.string().trim().required(),
+  email: Joi.string().trim().email().lowercase().required(),
+  name: Joi.string().trim().min(2).max(100).required(),
+});
+export const addUserValidator = (data = {}) => {
+  const {error, value} = addUserSchema.validate(
+      data,
+      {
+        abortEarly: false,
+        stripUnknown: true,
+        convert: true,
+      },
+  );
+  if (error) {
+    return {
+      success: false,
+      error: error.details.map((item) => item.message).join(", "),
+    };
+  }
+  return {
+    success: true,
+    data: value,
+  };
+};

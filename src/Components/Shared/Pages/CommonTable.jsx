@@ -96,15 +96,15 @@ export default function CommonTable({
 
                 const comparison =
                     firstValue !== "" &&
-                    secondValue !== "" &&
-                    Number.isFinite(firstNumber) &&
-                    Number.isFinite(secondNumber)
+                        secondValue !== "" &&
+                        Number.isFinite(firstNumber) &&
+                        Number.isFinite(secondNumber)
                         ? firstNumber - secondNumber
                         : String(firstValue ?? "").localeCompare(
-                              String(secondValue ?? ""),
-                              undefined,
-                              { numeric: true, sensitivity: "base" }
-                          );
+                            String(secondValue ?? ""),
+                            undefined,
+                            { numeric: true, sensitivity: "base" }
+                        );
 
                 return sortDirection === "asc"
                     ? comparison
@@ -265,8 +265,9 @@ export default function CommonTable({
                 )}
             </div>
 
+
             {/* Search toolbar */}
-            {(showSearch || actions) && (
+            {(showSearch || (headerActions && !showSearch)) && (
                 <div className="flex flex-col gap-3 border-b border-tertiary/30 bg-white px-5 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
                     <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center md:max-w-xl">
                         {showSearch && (
@@ -302,13 +303,14 @@ export default function CommonTable({
                         )}
                     </div>
 
-                    {actions && (
+                    {headerActions && (
                         <div className="flex flex-wrap items-center gap-2">
-                            {actions}
+                            {headerActions}
                         </div>
                     )}
                 </div>
             )}
+
 
             {/* Table */}
             <div className="relative w-full overflow-x-auto">
@@ -338,25 +340,22 @@ export default function CommonTable({
                                                     : "descending"
                                                 : "none"
                                         }
-                                        className={`whitespace-nowrap px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-secondary/80 ${
-                                            column.headerClassName ?? ""
-                                        } ${
-                                            column.align === "right"
+                                        className={`whitespace-nowrap px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-secondary/80 ${column.headerClassName ?? ""
+                                            } ${column.align === "right"
                                                 ? "text-right"
                                                 : column.align === "center"
                                                     ? "text-center"
                                                     : "text-left"
-                                        }`}
+                                            }`}
                                     >
                                         {column.sortable ? (
                                             <button
                                                 type="button"
                                                 onClick={() => handleSort(column)}
-                                                className={`inline-flex items-center gap-2 rounded-md text-left transition-colors hover:text-primary focus:outline-none focus:text-primary ${
-                                                    isSorted
+                                                className={`inline-flex items-center gap-2 rounded-md text-left transition-colors hover:text-primary focus:outline-none focus:text-primary ${isSorted
                                                         ? "text-primary"
                                                         : ""
-                                                }`}
+                                                    }`}
                                             >
                                                 {column.header}
 
@@ -411,11 +410,10 @@ export default function CommonTable({
                                                 className="px-5 py-5"
                                             >
                                                 <div
-                                                    className={`h-3 rounded-md bg-slate-200 ${
-                                                        colIndex % 2 === 0
+                                                    className={`h-3 rounded-md bg-slate-200 ${colIndex % 2 === 0
                                                             ? "w-28"
                                                             : "w-36"
-                                                    }`}
+                                                        }`}
                                                 />
                                             </td>
                                         ))}
@@ -443,15 +441,13 @@ export default function CommonTable({
                                     {visibleColumns.map((column, colIndex) => (
                                         <td
                                             key={column.key ?? colIndex}
-                                            className={`px-5 py-4 text-sm text-gray-700 ${
-                                                column.cellClassName ?? ""
-                                            } ${
-                                                column.align === "right"
+                                            className={`px-5 py-4 text-sm text-gray-700 ${column.cellClassName ?? ""
+                                                } ${column.align === "right"
                                                     ? "text-right"
                                                     : column.align === "center"
                                                         ? "text-center"
                                                         : "text-left"
-                                            }`}
+                                                }`}
                                         >
                                             {getCellValue(row, column, rowIndex)}
                                         </td>
@@ -587,11 +583,10 @@ export default function CommonTable({
                                 disabled={loading}
                                 aria-current={page === number ? "page" : undefined}
                                 onClick={() => setPage(number)}
-                                className={`${buttonBase} h-9 min-w-9 px-2.5 text-xs font-semibold ${
-                                    page === number
+                                className={`${buttonBase} h-9 min-w-9 px-2.5 text-xs font-semibold ${page === number
                                         ? "border-primary bg-primary text-white shadow-sm shadow-primary/20"
                                         : "border-tertiary/50 bg-white text-secondary hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
-                                }`}
+                                    }`}
                             >
                                 {number}
                             </button>
