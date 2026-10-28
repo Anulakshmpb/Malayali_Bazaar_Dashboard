@@ -611,9 +611,8 @@ export const manageProductType = callableWrapper(async (req) => {
 
 const bannerSchema = Joi.object({
   bannerId: Joi.string().trim().optional(),
-  tag: Joi.string().trim().allow("").optional(),
-  tittle: Joi.string().trim().allow("").optional(),
-  tagSubtitle: Joi.string().trim().allow("").optional(),
+  title: Joi.string().trim().allow("").optional(),
+  subtitle: Joi.string().trim().allow("").optional(),
   date: Joi.string().trim().allow("").optional(),
   linkText: Joi.string().trim().allow("").optional(),
   link: Joi.string().trim().allow("").optional(),
@@ -708,9 +707,8 @@ export const manageBanner = callableWrapper(async (req) => {
     }
     const {
       bannerId,
-      tag,
-      tittle,
-      tagSubtitle,
+      title,
+      subtitle,
       date,
       linkText,
       link,
@@ -740,9 +738,8 @@ export const manageBanner = callableWrapper(async (req) => {
     }
 
     const bannerData = {
-      ...(tag !== undefined && {tag}),
-      ...(tittle !== undefined && {tittle}),
-      ...(tagSubtitle !== undefined && {tagSubtitle}),
+      ...(title !== undefined && {title}),
+      ...(subtitle !== undefined && {subtitle}),
       ...(date !== undefined && {date}),
       ...(linkText !== undefined && {linkText}),
       ...(link !== undefined && {link}),
@@ -750,13 +747,9 @@ export const manageBanner = callableWrapper(async (req) => {
       ...(order !== undefined && {order}),
       ...(whatsappNo !== undefined && {whatsappNo}),
       ...(whatsappMessage !== undefined && {whatsappMessage}),
-
       ...(mainBanner !== undefined && {mainBanner}),
       ...(status !== undefined && {status}),
       ...(image !== undefined && {image}),
-      ...(tag !== undefined && {
-        searchKey: tag.toLowerCase().trim(),
-      }),
       updatedAt: FieldValue.serverTimestamp(),
       ...(!isUpdate && {
         createdAt: FieldValue.serverTimestamp(),

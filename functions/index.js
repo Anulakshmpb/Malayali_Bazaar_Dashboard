@@ -1,12 +1,12 @@
-
 import {setGlobalOptions} from "firebase-functions";
-
 import {
   manageAdmin,
   managePermission,
   addNewUser,
 } from "./src/Admin/admin.temp.js";
-import {manageProduct} from "./src/Product/product.callable.js";
+import {
+  manageProduct,
+} from "./src/Product/product.callable.js";
 import {
   manageCategory,
   manageSubCategory,
@@ -16,6 +16,10 @@ import {
   manageBanner,
   manageSection,
 } from "./src/Catalog/catalog.callable.js";
+import {
+  manageWebsiteManagement,
+} from "./src/WebsiteManagement/webManage.callable.js";
+
 setGlobalOptions({maxInstances: 10});
 
 export {manageAdmin,
@@ -29,4 +33,5 @@ export {manageAdmin,
   manageBanner,
   manageSection,
   addNewUser,
+  manageWebsiteManagement,
 };
