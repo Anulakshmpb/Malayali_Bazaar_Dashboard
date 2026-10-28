@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -8,10 +8,10 @@ import {
   useLocation,
 } from 'react-router-dom';
 
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../Config/Firebase';
+import { useUser } from '../Shared/hooks/UserContext';
 import AppBar from '../Shared/AppBar';
 import Login from '../Pages/Auth/Login';
+import AccessDenied from '../Shared/Pages/AccessDenied';
 import { PROTECTED_ROUTES } from './RoutesConfig';
 
 const Layout = () => {
@@ -42,26 +42,25 @@ const ProtectedRoute = ({ user }) => {
   return <Outlet />;
 };
 
+const PermissionRoute = ({ route }) => {
+  const { hasPermission } = useUser();
+  const PageComponent = route.element;
+
+  if (!hasPermission(route.path)) {
+    return <AccessDenied routeName={route.name} routePath={route.path} />;
+  }
+
+  return <PageComponent />;
+};
+
 export default function AppRoutes() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { user, loading, hasPermission } = useUser();
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      (currentUser) => {
-        setUser(currentUser);
-        setLoading(false);
-      },
-      (error) => {
-        console.error('Authentication error:', error);
-        setUser(null);
-        setLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, []);
+  const getDefaultRoute = () => {
+    if (hasPermission('/dashboard')) return '/dashboard';
+    const firstAllowed = PROTECTED_ROUTES.find((r) => hasPermission(r.path));
+    return firstAllowed ? firstAllowed.path : '/dashboard';
+  };
 
   if (loading) {
     return (
@@ -84,24 +83,22 @@ export default function AppRoutes() {
           path="/"
           element={
             user ? (
-              <Navigate to="/dashboard" replace />
+              <Navigate to={getDefaultRoute()} replace />
             ) : (
               <Login />
             )
           }
         />
 
-        {/* All authenticated pages */}
+        {/* All authenticated pages with permission checks */}
         <Route element={<ProtectedRoute user={user} />}>
           <Route element={<Layout />}>
             {PROTECTED_ROUTES.map((route) => {
-              const PageComponent = route.element;
-
               return (
                 <Route
                   key={route.path}
                   path={route.path}
-                  element={<PageComponent />}
+                  element={<PermissionRoute route={route} />}
                 />
               );
             })}
@@ -113,7 +110,7 @@ export default function AppRoutes() {
           path="*"
           element={
             <Navigate
-              to={user ? '/dashboard' : '/'}
+              to={user ? getDefaultRoute() : '/'}
               replace
             />
           }

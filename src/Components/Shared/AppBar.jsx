@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useMemo } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -19,20 +19,188 @@ import {
   PlusCircle,
   Boxes
 } from "lucide-react";
-import { adminLogout } from '../Pages/Auth/services/auth.api';
-import { auth, db } from "../Config/Firebase";
-import { collection, onSnapshot } from "firebase/firestore";
+import { useUser } from "./hooks/UserContext";
 import { FaArrowLeft } from "react-icons/fa";
+
+const MENU_ITEMS = [
+  {
+    title: "Main",
+    items: [
+      {
+        name: "Dashboard",
+        path: "/dashboard",
+        icon: LayoutDashboard,
+      },
+      {
+        name: "All Orders",
+        path: "/orders",
+        icon: ShoppingCart,
+      },
+    ],
+  },
+
+  {
+    title: "Management",
+    items: [
+      {
+        name: "Product",
+        path: "/products",
+        icon: Package,
+        subItems: [
+          {
+            name: "View Products",
+            path: "/products",
+            icon: Boxes,
+          },
+          {
+            name: "Add Products",
+            path: "/products/add",
+            icon: PlusCircle,
+          },
+        ],
+      },
+
+      {
+        name: "Section Management",
+        path: "/section",
+        icon: Layers,
+      },
+
+      {
+        name: "Banner",
+        path: "/banner",
+        icon: Image,
+      },
+
+      {
+        name: "Users",
+        path: "/users",
+        icon: Users,
+      },
+      {
+        name: "Customer Ledger",
+        path: "/customer-ledger",
+        icon: Layers,
+      },
+      {
+        name: "Delivery Charges",
+        path: "/delivery-charges",
+        icon: Truck,
+      },
+      {
+        name: "Website Management",
+        icon: FileText,
+        subItems: [
+          {
+            name: "Footer",
+            path: "/footer",
+            icon: Truck,
+          },
+          {
+            name: "Privacy Policy",
+            path: "/privacy",
+            icon: ShieldCheck,
+          },
+          {
+            name: "Term & Conditions",
+            path: "/terms",
+            icon: FileCheck,
+          },
+          {
+            name: "Shipping Policy",
+            path: "/shipping",
+            icon: FileCheck,
+          },
+          {
+            name: "Common Section",
+            path: "/common-section",
+            icon: FileCheck,
+          },
+        ],
+      },
+      {
+        name: "Settings",
+        icon: Settings,
+        subItems: [
+          {
+            name: "Admin Users",
+            path: "/admin/users",
+            icon: UserCheck,
+          },
+          {
+            name: "Admin Settings",
+            path: "/admin/settings",
+            icon: Sliders,
+          },
+        ],
+      },
+    ],
+  },
+
+  {
+    title: "System",
+    items: [
+      {
+        name: "Reports",
+        path: "/reports",
+        icon: FileBarChart,
+      },
+      {
+        name: "Analytics",
+        path: "/analytics",
+        icon: TrendingUp,
+      },
+    ],
+  },
+];
+
+const TOP_NAV_ITEMS = [
+  {
+    name: "All Orders",
+    path: "/orders",
+    icon: ShoppingCart,
+  },
+  {
+    name: "Products",
+    path: "/products",
+    icon: Package,
+    subItems: [
+      {
+        name: "View Products",
+        path: "/products",
+        icon: Boxes,
+      },
+      {
+        name: "Add Products",
+        path: "/products/add",
+        icon: PlusCircle,
+      },
+    ],
+  },
+  {
+    name: "Users",
+    path: "/users",
+    icon: Users,
+  },
+  {
+    name: "Reports",
+    path: "/reports",
+    icon: FileBarChart,
+  },
+  {
+    name: "Analytics",
+    path: "/analytics",
+    icon: TrendingUp,
+  },
+];
 
 function AppBar({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { adminUser, logout, hasPermission } = useUser();
 
   const [expandedMenus, setExpandedMenus] = useState({});
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [adminUsers, setAdminUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
 
   const handleBack = () => {
@@ -73,181 +241,11 @@ function AppBar({ children }) {
     return false;
   };
 
-  const menuItems = [
-    {
-      title: "Main",
-      items: [
-        {
-          name: "Dashboard",
-          path: "/dashboard",
-          icon: LayoutDashboard,
-        },
-        {
-          name: "All Orders",
-          path: "/orders",
-          icon: ShoppingCart,
-        },
-      ],
-    },
-
-    {
-      title: "Management",
-      items: [
-        {
-          name: "Product",
-          path: "/products",
-          icon: Package,
-          subItems: [
-            {
-              name: "View Products",
-              path: "/products",
-              icon: Boxes,
-            },
-            {
-              name: "Add Products",
-              path: "/products/add",
-              icon: PlusCircle,
-            },
-          ],
-        },
-
-        {
-          name: "Section Management",
-          path: "/section",
-          icon: Layers,
-        },
-
-        {
-          name: "Banner",
-          path: "/banner",
-          icon: Image,
-        },
-
-        {
-          name: "Users",
-          path: "/users",
-          icon: Users,
-        },
-        {
-          name: "Customer Ledger",
-          path: "/customer-ledger",
-          icon: Layers,
-        },
-        {
-          name: "Delivery Charges",
-          path: "/delivery-charges",
-          icon: Truck,
-        },
-        {
-          name: "Website Management",
-          icon: FileText,
-          subItems: [
-            {
-              name: "Footer",
-              path: "/footer",
-              icon: Truck,
-            },
-            {
-              name: "Privacy Policy",
-              path: "/privacy",
-              icon: ShieldCheck,
-            },
-            {
-              name: "Term & Conditions",
-              path: "/terms",
-              icon: FileCheck,
-            },
-            {
-              name: "Shipping Policy",
-              path: "/shipping",
-              icon: FileCheck,
-            },
-            {
-              name: "Common Section",
-              path: "/common-section",
-              icon: FileCheck,
-            },
-          ],
-        },
-        {
-          name: "Settings",
-          icon: Settings,
-          subItems: [
-            {
-              name: "Admin Users",
-              path: "/admin/users",
-              icon: UserCheck,
-            },
-            {
-              name: "Admin Settings",
-              path: "/admin/settings",
-              icon: Sliders,
-            },
-          ],
-        },
-      ],
-    },
-
-    {
-      title: "System",
-      items: [
-        {
-          name: "Reports",
-          path: "/reports",
-          icon: FileBarChart,
-        },
-        {
-          name: "Analytics",
-          path: "/analytics",
-          icon: TrendingUp,
-        },
-      ],
-    },
-  ];
-
-  const topNavItems = [
-    {
-      name: "All Orders",
-      path: "/orders",
-      icon: ShoppingCart,
-    },
-    {
-      name: "Products",
-      path: "/products",
-      icon: Package,
-      subItems: [
-        {
-          name: "View Products",
-          path: "/products",
-          icon: Boxes,
-        },
-        {
-          name: "Add Products",
-          path: "/products/add",
-          icon: PlusCircle,
-        },
-      ],
-    },
-    {
-      name: "Users",
-      path: "/users",
-      icon: Users,
-    },
-    {
-      name: "Reports",
-      path: "/reports",
-      icon: FileBarChart,
-    },
-    {
-      name: "Analytics",
-      path: "/analytics",
-      icon: TrendingUp,
-    },
-  ];
-
   const handleLogout = async () => {
     try {
-      await adminLogout();
+      if (logout) {
+        await logout();
+      }
       closeSidebar();
       navigate('/', { replace: true });
     } catch (error) {
@@ -255,45 +253,70 @@ function AppBar({ children }) {
     }
   };
 
-  useEffect(() => {
-    setLoading(true);
-    const user = auth.currentUser;
-    if (!user) {
-      console.error("No authenticated user found.");
-      return;
-    }
-    const adminsRef = collection(db, "adminUsers");
-    const unsubscribe = onSnapshot(
-      adminsRef,
-      (snapshot) => {
-        const adminList = snapshot.docs
-          .map((document) => ({
-            id: document.id,
-            ...document.data(),
-          }))
-          .filter((admin) => admin.uid === user.uid)
-          .sort((a, b) =>
-            String(a.name || "").localeCompare(
-              String(b.name || "")
-            )
+  // Filter sidebar navigation items based on admin permissions
+  const filteredMenuItems = useMemo(() => {
+    return MENU_ITEMS
+      .map((section) => {
+        const filteredItems = section.items
+          .map((item) => {
+            if (item.subItems && item.subItems.length > 0) {
+              const allowedSubItems = item.subItems.filter((subItem) =>
+                hasPermission(subItem.path)
+              );
+              if (allowedSubItems.length > 0) {
+                return {
+                  ...item,
+                  subItems: allowedSubItems,
+                };
+              }
+              if (item.path && hasPermission(item.path)) {
+                return {
+                  ...item,
+                  subItems: [],
+                };
+              }
+              return null;
+            }
+
+            return hasPermission(item.path) ? item : null;
+          })
+          .filter(Boolean);
+
+        return {
+          ...section,
+          items: filteredItems,
+        };
+      })
+      .filter((section) => section.items.length > 0);
+  }, [hasPermission]);
+
+  // Filter top navigation items based on admin permissions
+  const filteredTopNavItems = useMemo(() => {
+    return TOP_NAV_ITEMS
+      .map((item) => {
+        if (item.subItems && item.subItems.length > 0) {
+          const allowedSubItems = item.subItems.filter((subItem) =>
+            hasPermission(subItem.path)
           );
+          if (allowedSubItems.length > 0) {
+            return {
+              ...item,
+              subItems: allowedSubItems,
+            };
+          }
+          if (item.path && hasPermission(item.path)) {
+            return {
+              ...item,
+              subItems: [],
+            };
+          }
+          return null;
+        }
 
-        setAdminUsers(adminList);
-        setLoading(false);
-        setError("");
-      },
-      (err) => {
-        console.error("Failed to load admin users:", err);
-        console.log(user.uid)
-        setError(
-          "Unable to load administrators. Check your Firestore permissions."
-        );
-        setLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, []);
+        return hasPermission(item.path) ? item : null;
+      })
+      .filter(Boolean);
+  }, [hasPermission]);
   return (
     <>
       {/* =====================================================
@@ -314,11 +337,11 @@ function AppBar({ children }) {
                 className="flex items-center gap-2"
               >
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary font-bold text-white">
-                  {adminUsers.name && adminUsers.name.charAt(0).toUpperCase() || "A"}
+                  {adminUser?.name ? adminUser.name.charAt(0).toUpperCase() : "A"}
                 </div>
 
                 <span className="hidden font-jakarta text-[19px] font-bold text-gray-900 sm:block">
-                  {adminUsers.name || "Admin Panel"}
+                  {adminUser?.name || "Admin Panel"}
                 </span>
               </NavLink>
             </div>
@@ -364,7 +387,7 @@ function AppBar({ children }) {
               <FaArrowLeft size={14} />
               <span>Back</span>
             </button>
-            {topNavItems.map((item) => {
+            {filteredTopNavItems.map((item) => {
               const hasSubItems =
                 item.subItems && item.subItems.length > 0;
               const active = isParentActive(item);
@@ -494,17 +517,17 @@ function AppBar({ children }) {
 
                 {/* Avatar */}
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-tertiary/30 text-sm font-semibold text-gray-900">
-                  {adminUsers.name && adminUsers.name.charAt(0).toUpperCase() || "A"}
+                  {adminUser?.name ? adminUser.name.charAt(0).toUpperCase() : "A"}
                 </div>
 
                 {/* User */}
                 <div className="hidden text-left xl:block">
                   <p className="font-inter text-[13px] font-semibold text-gray-900">
-                    {adminUsers.name || "Admin"}
+                    {adminUser?.name || "Admin"}
                   </p>
 
                   <p className="font-inter text-[11px] text-gray-500">
-                    {adminUsers.role || "Administrator"}
+                    {adminUser?.role || "Administrator"}
                   </p>
                 </div>
 
@@ -667,7 +690,7 @@ function AppBar({ children }) {
         ================================================== */}
         <nav className="h-[calc(100vh-4rem)] overflow-y-auto px-3 py-4">
 
-          {menuItems.map((section) => (
+          {filteredMenuItems.map((section) => (
             <div
               key={section.title}
               className="mb-5"
