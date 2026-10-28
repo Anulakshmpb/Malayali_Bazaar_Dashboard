@@ -52,13 +52,13 @@ export const addAdminValidator = (data = {}) => {
       };
   }
 
-  const { error, value } = schema.validate(
-    { ...data, action },
-    {
-      abortEarly: false,
-      stripUnknown: true,
-      convert: true,
-    },
+  const {error, value} = schema.validate(
+      {...data, action},
+      {
+        abortEarly: false,
+        stripUnknown: true,
+        convert: true,
+      },
   );
 
   if (error) {
@@ -119,13 +119,13 @@ export const addPermissionsValidator = (data = {}) => {
       };
   }
 
-  const { error, value } = schema.validate(
-    { ...data, action },
-    {
-      abortEarly: false,
-      stripUnknown: true,
-      convert: true,
-    },
+  const {error, value} = schema.validate(
+      {...data, action},
+      {
+        abortEarly: false,
+        stripUnknown: true,
+        convert: true,
+      },
   );
   if (error) {
     return {
@@ -151,13 +151,13 @@ const addUserSchema = Joi.object({
   name: Joi.string().trim().min(2).max(100).required(),
 });
 export const addUserValidator = (data = {}) => {
-  const { error, value } = addUserSchema.validate(
-    data,
-    {
-      abortEarly: false,
-      stripUnknown: true,
-      convert: true,
-    },
+  const {error, value} = addUserSchema.validate(
+      data,
+      {
+        abortEarly: false,
+        stripUnknown: true,
+        convert: true,
+      },
   );
   if (error) {
     return {

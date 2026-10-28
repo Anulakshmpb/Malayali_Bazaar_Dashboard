@@ -28,7 +28,6 @@ const ASPECT_RATIO_PRESETS = [
 const INITIAL_FORM_DATA = {
     desktop_img_url: '',
     mobile_img_url: '',
-    tag: '',
     title: '',
     subtitle: '',
     date: '',
@@ -69,7 +68,7 @@ export default function Banner() {
     const [aspect, setAspect] = useState(4.5 / 1);
 
     const desktopFileInputRef = useRef(null);
-    const mobileFileInputRef = useRef(null);
+    // const mobileFileInputRef = useRef(null);
 
     const [formData, setFormData] = useState(INITIAL_FORM_DATA);
 
@@ -84,8 +83,8 @@ export default function Banner() {
                 ...banner,
                 id: banner.bannerId,
                 desktop_img_url: banner.image || banner.desktop_img_url || '',
-                title: banner.tittle || banner.title || '',
-                subtitle: banner.tagSubtitle || banner.subtitle || '',
+                title: banner.title || banner.title || '',
+                subtitle: banner.subtitle || '',
                 whatsapp_number: banner.whatsappNo || banner.whatsapp_number || '',
                 whatsappMessage: banner.whatsappMessage || '',
                 isMainBanner: Boolean(banner.mainBanner ?? banner.isMainBanner),
@@ -165,9 +164,9 @@ export default function Banner() {
             }
 
             const fields = {
-                tag: formData.tag,
-                tittle: formData.title,
-                tagSubtitle: formData.subtitle,
+                // tag: formData.tag,
+                title: formData.title,
+                subtitle: formData.subtitle,
                 date: formData.date,
                 linkText: formData.linkText,
                 link: formData.link,
@@ -202,7 +201,7 @@ export default function Banner() {
     };
 
     const handleDelete = async (banner) => {
-        if (!window.confirm(`Delete banner "${banner.title || banner.tag || 'Untitled'}"?`)) return;
+        if (!window.confirm(`Delete banner "${banner.title || 'Untitled'}"?`)) return;
         try {
             const response = await manageBanner({
                 action: 'delete',
@@ -239,7 +238,7 @@ export default function Banner() {
     };
 
     const filteredBanners = banners.filter(banner => (
-        [banner.tag, banner.title, banner.subtitle]
+        [ banner.title, banner.subtitle]
             .some(value => String(value || '').toLowerCase().includes(searchTerm.trim().toLowerCase()))
     ));
 
@@ -317,8 +316,8 @@ export default function Banner() {
                                                     ...INITIAL_FORM_DATA,
                                                     ...banner,
                                                     desktop_img_url: banner.desktop_img_url || banner.image || '',
-                                                    title: banner.title || banner.tittle || '',
-                                                    subtitle: banner.subtitle || banner.tagSubtitle || '',
+                                                    title: banner.title || banner.title || '',
+                                                    subtitle: banner.subtitle || '',
                                                     order: banner.order || '',
                                                     whatsapp_number: banner.whatsapp_number || banner.whatsappNo || '',
                                                     whatsappMessage: banner.whatsappMessage || '',
@@ -347,9 +346,9 @@ export default function Banner() {
                                 <div className="flex flex-col p-5 flex-1 bg-white">
                                     <div className="flex items-start justify-between gap-4">
                                         <div>
-                                            <span className="inline-flex items-center justify-center rounded-md border border-tertiary/60 bg-slate-50 px-2 py-0.5 text-xs font-bold text-gray-900 shadow-sm mb-2">
+                                            {/* <span className="inline-flex items-center justify-center rounded-md border border-tertiary/60 bg-slate-50 px-2 py-0.5 text-xs font-bold text-gray-900 shadow-sm mb-2">
                                                 {banner.tag}
-                                            </span>
+                                            </span> */}
                                             <h3 className="text-lg font-bold text-gray-900">{banner.title}</h3>
                                         </div>
 
@@ -546,11 +545,8 @@ export default function Banner() {
                                         </div> */}
                                     </div>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-semibold text-gray-900 mb-2">Tag</label>
-                                            <input type="text" name="tag" className="w-full rounded-lg border border-tertiary/60 bg-slate-50 px-4 py-2.5 text-sm font-medium text-gray-900 outline-none transition placeholder:text-secondary/50 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10" placeholder="e.g. ⚡ Online Exclusive" value={formData.tag} onChange={handleChange} />
-                                        </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                                       
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-900 mb-2">Title</label>
                                             <input type="text" name="title" className="w-full rounded-lg border border-tertiary/60 bg-slate-50 px-4 py-2.5 text-sm font-medium text-gray-900 outline-none transition placeholder:text-secondary/50 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10" placeholder="e.g. Buy 5 Save 5%" value={formData.title} onChange={handleChange} />
