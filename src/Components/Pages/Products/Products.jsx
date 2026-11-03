@@ -222,6 +222,10 @@ export default function Products() {
 
                     <div className="flex flex-wrap gap-2">
                         <button className="flex items-center gap-2 px-4 py-2 bg-white border border-tertiary/60 text-gray-900 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            onClick={() => navigate('/product/scheme')}>
+                            <Archive size={16} className="text-secondary" /> Scheme Management
+                        </button>
+                        <button className="flex items-center gap-2 px-4 py-2 bg-white border border-tertiary/60 text-gray-900 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                             onClick={() => navigate('/products/stock')}>
                             <Archive size={16} className="text-secondary" /> Stock Management
                         </button>
@@ -477,6 +481,7 @@ export default function Products() {
                     </div>
                 </div>
             )}
+
         </div>
     )
 }

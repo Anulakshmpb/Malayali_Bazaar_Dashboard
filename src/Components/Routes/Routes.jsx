@@ -12,9 +12,22 @@ import { useUser } from '../Shared/hooks/UserContext';
 import AppBar from '../Shared/AppBar';
 import Login from '../Pages/Auth/Login';
 import AccessDenied from '../Shared/Pages/AccessDenied';
+import useFcmSubscription from '../Shared/hooks/UseFcmSubscription';
 import { PROTECTED_ROUTES } from './RoutesConfig';
 
 const Layout = () => {
+  const { user } = useUser();
+  const {
+    subscribe,
+    isSubscribed,
+    loading,
+    error,
+    permission,
+    foregroundMessage,
+    setForegroundMessage,
+    serviceWorkerMessage,
+  } = useFcmSubscription(user?.uid, "adminUsers");
+
   return (
     <div className="App min-h-screen bg-white">
       <AppBar>
@@ -22,6 +35,28 @@ const Layout = () => {
           <Outlet />
         </div>
       </AppBar>
+
+
+
+      {/* ── FCM: Foreground Message Toast ── */}
+      {foregroundMessage && (
+        <div className="fixed right-6 top-20 z-[100] w-80 animate-[slideIn_0.3s_ease-out] rounded-xl border border-gray-200 bg-white p-4 shadow-xl">
+          <div className="mb-1 flex items-start justify-between">
+            <h4 className="text-sm font-bold text-gray-900">
+              {foregroundMessage.title}
+            </h4>
+            <button
+              onClick={() => setForegroundMessage(null)}
+              className="ml-2 flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+            >
+              ×
+            </button>
+          </div>
+          <p className="text-sm text-gray-600">
+            {foregroundMessage.body}
+          </p>
+        </div>
+      )}
     </div>
   );
 };

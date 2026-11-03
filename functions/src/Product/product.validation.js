@@ -1,5 +1,11 @@
+
 /* eslint-disable max-len */
 import Joi from "joi";
+
+const schemeItemSchema = Joi.object({
+  schemeId: Joi.string().trim().required(),
+  offerPrice: Joi.number().min(0).required(),
+});
 
 const productFields = {
   productName: Joi.string().trim().required(),
@@ -11,6 +17,12 @@ const productFields = {
   subCategoryId: Joi.string().required(),
   brand: Joi.string().required(),
   brandId: Joi.string().required(),
+  schemes: Joi.array()
+      .items(schemeItemSchema)
+      .unique("schemeId"),
+  schemeIds: Joi.array()
+      .items(Joi.string().trim().required())
+      .unique(),
   relatedProduct: Joi.array().items(
       Joi.object({
         productId: Joi.string().required(),
@@ -30,21 +42,44 @@ const productFields = {
   stock: Joi.number().min(0).required(),
   mrp: Joi.number().min(0).required(),
   offerPrice: Joi.number().min(0).allow("", null),
-  specialPrice: Joi.number().min(0).allow("", null),
   distributorPrice: Joi.number().min(0).allow("", null),
   thumbnail: Joi.string().allow("", null),
   images: Joi.array().items(Joi.string()),
 };
+const validateSchemeIds = (value, helpers) => {
+  const {schemes, schemeIds} = value;
 
-const setProductSchema = Joi.object(productFields);
+  if (schemes !== undefined && schemeIds !== undefined) {
+    const expectedIds = schemes.map((scheme) => scheme.schemeId);
+
+    if (
+      expectedIds.length !== schemeIds.length ||
+      expectedIds.some((id) => !schemeIds.includes(id))
+    ) {
+      return helpers.error("any.invalid", {
+        message: "schemeIds must match the schemeId values in schemes.",
+      });
+    }
+  }
+
+  return value;
+};
+
+const setProductSchema = Joi.object(productFields)
+    .custom(validateSchemeIds, "scheme ID consistency validation");
+
+const editProductFieldsSchema = Joi.object(productFields)
+    .fork(
+        Object.keys(productFields),
+        (field) => field.optional(),
+    )
+    .min(1)
+    .unknown(false)
+    .custom(validateSchemeIds, "scheme ID consistency validation");
 
 const editProductSchema = Joi.object({
   productDocId: Joi.string().trim().required(),
-  fields: Joi.object(productFields)
-      .fork(Object.keys(productFields), (field) => field.optional())
-      .min(1)
-      .unknown(false)
-      .required(),
+  fields: editProductFieldsSchema.required(),
 });
 
 const deleteProductSchema = Joi.object({

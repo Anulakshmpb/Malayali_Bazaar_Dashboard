@@ -1,3 +1,4 @@
+
 export const PAGE_NAMES = [
   'Dashboard',
   'Admin Users',
@@ -23,5 +24,9 @@ export const PAGE_NAMES = [
   'Analytics',
   'Customer Ledger',
   'View Ledger',
-  'Delivery Charges' 
+  'Delivery Charges',
+  'Notification',
+  'SchemeManagement',
+  'Notification Templates',
+  'Send Notification',
 ];

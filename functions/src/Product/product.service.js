@@ -25,6 +25,8 @@ const addProductService = async (data) => {
       subCategoryId,
       brand,
       brandId,
+      schemes,
+      schemeIds,
       relatedProduct,
       details,
       isActive,
@@ -39,13 +41,17 @@ const addProductService = async (data) => {
       stock,
       mrp,
       offerPrice,
-      specialPrice,
       distributorPrice,
       thumbnail,
       images,
     } = fields;
 
     const productID = `${codeLetters}${codeNumber}`;
+    const productSchemes = schemes || [];
+
+    const productSchemeIds = schemes !== undefined ?
+      productSchemes.map((scheme) => scheme.schemeId) :
+      (schemeIds || []);
 
     const batch = db.batch();
 
@@ -65,6 +71,8 @@ const addProductService = async (data) => {
       subCategoryId,
       brand,
       brandId,
+      schemes: productSchemes,
+      schemeIds: productSchemeIds,
       relatedProduct: relatedProduct || [],
       details: details ?? {},
       isActive: isActive ?? true,
@@ -79,7 +87,6 @@ const addProductService = async (data) => {
       stock,
       mrp,
       offerPrice: offerPrice ?? "",
-      specialPrice: specialPrice ?? "",
       distributorPrice: distributorPrice ?? "",
       thumbnail: thumbnail ?? "",
       images: images || [],
@@ -116,6 +123,7 @@ const addProductService = async (data) => {
 const editProductService = async (data) => {
   try {
     const {productDocId, fields} = data;
+
     const productRef = db.collection("products").doc(productDocId);
     const productDoc = await productRef.get();
 
@@ -126,13 +134,31 @@ const editProductService = async (data) => {
       };
     }
 
+    const existingProduct = productDoc.data();
+
     const updatedFields = {
       ...fields,
       updatedAt: FieldValue.serverTimestamp(),
     };
 
-    if (fields.codeLetters !== undefined || fields.codeNumber !== undefined) {
-      updatedFields.productId = `${fields.codeLetters ?? productDoc.data().codeLetters}${fields.codeNumber ?? productDoc.data().codeNumber}`;
+    if (fields.schemes !== undefined) {
+      updatedFields.schemes = fields.schemes || [];
+
+      updatedFields.schemeIds = fields.schemes.map(
+          (scheme) => scheme.schemeId,
+      );
+    } else if (fields.schemeIds !== undefined) {
+      updatedFields.schemeIds = fields.schemeIds || [];
+    }
+
+    if (
+      fields.codeLetters !== undefined ||
+      fields.codeNumber !== undefined
+    ) {
+      updatedFields.productId =
+        `${fields.codeLetters ?? existingProduct.codeLetters}${
+          fields.codeNumber ?? existingProduct.codeNumber
+        }`;
     }
 
     if (fields.productName !== undefined) {
@@ -144,7 +170,9 @@ const editProductService = async (data) => {
     return {
       success: true,
       message: "Product updated successfully",
-      data: {productDocId},
+      data: {
+        productDocId,
+      },
     };
   } catch (error) {
     console.error("Error updating product:", error);
@@ -159,6 +187,7 @@ const editProductService = async (data) => {
 const deleteProductService = async (data) => {
   try {
     const {productDocId} = data;
+
     const productRef = db.collection("products").doc(productDocId);
     const analyticsRef = db.collection("analytics").doc("products");
 
@@ -185,7 +214,9 @@ const deleteProductService = async (data) => {
     return {
       success: true,
       message: "Product deleted successfully",
-      data: {productDocId},
+      data: {
+        productDocId,
+      },
     };
   } catch (error) {
     console.error("Error deleting product:", error);

@@ -134,6 +134,27 @@ const MENU_ITEMS = [
           },
         ],
       },
+      {
+        name: "Notifications",
+        icon: Settings,
+        subItems: [
+          {
+            name: "Notifications",
+            path: "/notification",
+            icon: UserCheck,
+          },
+          {
+            name: "Notification Template",
+            path: "/notification-templates",
+            icon: Sliders,
+          },
+          {
+            name: "Send Notification",
+            path: "/send-notification",
+            icon: Sliders,
+          },
+        ],
+      },
     ],
   },
 
@@ -488,7 +509,8 @@ function AppBar({ children }) {
             {/* Notification */}
             <button
               type="button"
-              title="Notifications"
+              onClick={() => navigate('/notification')}
+              title="Notification"
               className="relative flex h-10 w-10 items-center justify-center rounded-lg text-secondary transition hover:bg-tertiary/10 hover:text-gray-900"
             >
               <svg
