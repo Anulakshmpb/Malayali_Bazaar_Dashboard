@@ -15,11 +15,14 @@ import {
   manageDeliveryCharge,
   manageBanner,
   manageSection,
+  manageScheme,
 } from "./src/Catalog/catalog.callable.js";
 import {
   manageWebsiteManagement,
 } from "./src/WebsiteManagement/webManage.callable.js";
-
+import {sendPushNotification,
+  syncNotificationTopics,
+} from "./src/Notification/notification.js";
 setGlobalOptions({maxInstances: 10});
 
 export {manageAdmin,
@@ -34,4 +37,7 @@ export {manageAdmin,
   manageSection,
   addNewUser,
   manageWebsiteManagement,
+  manageScheme,
+  sendPushNotification,
+  syncNotificationTopics,
 };

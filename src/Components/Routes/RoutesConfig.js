@@ -23,6 +23,10 @@ import Analytics from '../Pages/Reports/Analytics';
 import UserLedger from '../Pages/UserLedger/UserLedger';
 import ViewLedger from '../Pages/UserLedger/ViewLedger';
 import DeliveryCharges from '../Pages/DeliveryCharges/DeliveryCharges';
+import Notification from '../Pages/Notifications/Notification';
+import SchemeManagement from '../Pages/Products/Scheme';
+import SendNotification from '../Pages/Notifications/SendNotification';
+import NotificationTemplates from '../Pages/Notifications/NotificatoinTemplate';
 
 export const PROTECTED_ROUTES = [
   {
@@ -150,4 +154,24 @@ export const PROTECTED_ROUTES = [
     name: 'Delivery Charges',
     element: DeliveryCharges,
   },
+  {
+    path: '/notification',
+    name: 'Notification',
+    element: Notification,
+  },
+  {
+    path: '/product/scheme',
+    name: 'Scheme Management',
+    element: SchemeManagement,
+  },
+  {
+    path: "/notification-templates",
+    name: 'Notification Templates',
+    element: NotificationTemplates
+},
+{
+    path: "/send-notification",
+    name: 'Send Notification',
+    element: SendNotification
+}
 ];

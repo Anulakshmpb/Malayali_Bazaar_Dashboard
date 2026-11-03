@@ -23,15 +23,14 @@ const manageProductTypeCallable = httpsCallable(functions, 'manageProductType');
 const manageCategoryCallable = httpsCallable(functions, 'manageCategory');
 const manageSubCategoryCallable = httpsCallable(functions, 'manageSubCategory');
 const manageBrandCallable = httpsCallable(functions, 'manageBrand');
-
+const manageSchemeCallable = httpsCallable(functions, 'manageScheme')
 export default function AddProduct() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const editProductId = searchParams.get('edit');
     const { showToast } = useToast();
-
     const [stockInfo, setStockInfo] = useState({ quantity: '', unit: 'g', stock: '' });
-    const [pricing, setPricing] = useState({ mrp: '', distributorPrice: '', offerPrice: '', specialPrice: '' });
+    const [pricing, setPricing] = useState({ mrp: '', distributorPrice: '', offerPrice: '' });
     const [taxApplicable, setTaxApplicable] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [relatedProducts, setRelatedProducts] = useState([]);
@@ -51,13 +50,17 @@ export default function AddProduct() {
     const [productLoadError, setProductLoadError] = useState(false);
     const [existingThumbnail, setExistingThumbnail] = useState('');
     const [existingGallery, setExistingGallery] = useState([]);
+    const [schemeOfferPrice, setSchemeOfferPrice] = useState('');
     const [details, setDetails] = useState({
         description: '',
         shelfLife: '',
         storageInstructions: '',
         ingredients: '',
     });
-
+    const [schemeOptions, setSchemeOptions] = useState([]);
+    const [selectedSchemes, setSelectedSchemes] = useState([]);
+    const [schemeLoading, setSchemeLoading] = useState(true);
+    const [selectedSchemeId, setSelectedSchemeId] = useState('');
     useEffect(() => {
         let active = true;
         const loadCatalogOptions = async () => {
@@ -172,10 +175,31 @@ export default function AddProduct() {
                     mrp: data.mrp ?? '',
                     distributorPrice: data.distributorPrice ?? '',
                     offerPrice: data.offerPrice ?? '',
-                    specialPrice: data.specialPrice ?? '',
                 });
                 setTaxApplicable(Boolean(data.taxApplicable));
                 setRelatedProducts(data.relatedProduct || []);
+                // Restore previously selected schemes and their offer prices
+                const existingSchemes = Array.isArray(data.schemes)
+                    ? data.schemes
+                    : [];
+
+                if (existingSchemes.length > 0) {
+                    setSelectedSchemes(
+                        existingSchemes.map(scheme => ({
+                            schemeId: scheme.schemeId,
+                            offerPrice: scheme.offerPrice ?? '',
+                        }))
+                    );
+                } else if (Array.isArray(data.schemeIds)) {
+                    setSelectedSchemes(
+                        data.schemeIds.map(schemeId => ({
+                            schemeId,
+                            offerPrice: '',
+                        }))
+                    );
+                } else {
+                    setSelectedSchemes([]);
+                }
                 setExistingThumbnail(data.thumbnail || '');
                 setExistingGallery(data.images || []);
                 setDetails({
@@ -197,6 +221,48 @@ export default function AddProduct() {
         loadProduct();
         return () => { active = false; };
     }, [editProductId, showToast]);
+    useEffect(() => {
+        let active = true;
+
+        const loadSchemes = async () => {
+            try {
+                setSchemeLoading(true);
+
+                const response = await manageSchemeCallable({
+                    action: 'list',
+                });
+
+                if (!response.data?.success) {
+                    throw new Error(
+                        response.data?.message || 'Unable to load schemes.'
+                    );
+                }
+
+                if (active) {
+                    setSchemeOptions(response.data.data || []);
+                }
+            } catch (error) {
+                if (!active) return;
+
+                console.error('Failed to load schemes:', error);
+
+                showToast(
+                    error.message || 'Unable to load schemes.',
+                    'error'
+                );
+            } finally {
+                if (active) {
+                    setSchemeLoading(false);
+                }
+            }
+        };
+
+        loadSchemes();
+
+        return () => {
+            active = false;
+        };
+    }, [showToast]);
 
     const updateStockInfo = (field, value) => setStockInfo(prev => ({ ...prev, [field]: value }));
     const updatePricing = (field, value) => setPricing(prev => ({ ...prev, [field]: value }));
@@ -407,7 +473,34 @@ export default function AddProduct() {
             />
         </div>
     );
+    const addSelectedScheme = () => {
+        if (!selectedSchemeId || !schemeOfferPrice || Number(schemeOfferPrice) <= 0) {
+            return;
+        }
 
+        const scheme = schemeOptions.find(
+            item => item.schemeId === selectedSchemeId
+        );
+
+        if (!scheme) return;
+
+        setSelectedSchemes(prev => [
+            ...prev,
+            {
+                schemeId: scheme.schemeId,
+                offerPrice: Number(schemeOfferPrice),
+            },
+        ]);
+
+        setSelectedSchemeId('');
+        setSchemeOfferPrice('');
+    };
+
+    const removeSelectedScheme = (schemeId) => {
+        setSelectedSchemes(prev =>
+            prev.filter(scheme => scheme.schemeId !== schemeId)
+        );
+    };
     const handleSubmit = async (event) => {
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
@@ -449,6 +542,12 @@ export default function AddProduct() {
                 subCategoryId,
                 brand,
                 brandId,
+                schemes: selectedSchemes.map(scheme => ({
+                    schemeId: scheme.schemeId,
+                    offerPrice: Number(scheme.offerPrice),
+                })),
+
+                schemeIds: selectedSchemes.map(scheme => scheme.schemeId),
                 relatedProduct: relatedProducts
                     .filter(product => product.productId && product.productName)
                     .map(product => ({
@@ -474,7 +573,6 @@ export default function AddProduct() {
                 mrp: numberValue('mrp'),
                 distributorPrice: numberValue('distributorPrice'),
                 offerPrice: numberValue('offerPrice'),
-                specialPrice: numberValue('specialPrice'),
                 thumbnail: thumbnailUrl || existingThumbnail,
                 images: [...existingGallery, ...images],
             };
@@ -657,79 +755,79 @@ export default function AddProduct() {
                                         : []),
                                 ]}
                             />
-                           
+
                         </div>
-                         <div className="mt-3">
-                                <label className={labelClass}>
-                                    Product Details
-                                </label>
-                                <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-4">
-                                    <div>
-                                        <label
-                                            htmlFor="details-description"
-                                            className="mb-1 block text-xs font-medium text-gray-600"
-                                        >
-                                            Description
-                                        </label>
-                                        <textarea
-                                            id="details-description"
-                                            rows={2}
-                                            value={details.description}
-                                            onChange={event => setDetails(prev => ({ ...prev, description: event.target.value }))}
-                                            placeholder="Product description..."
-                                            className={`${inputClass} resize-y`}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label
-                                            htmlFor="details-shelfLife"
-                                            className="mb-1 block text-xs font-medium text-gray-600"
-                                        >
-                                            Shelf Life
-                                        </label>
-                                        <textarea
-                                            id="details-shelfLife"
-                                            rows={2}
-                                            value={details.shelfLife}
-                                            onChange={event => setDetails(prev => ({ ...prev, shelfLife: event.target.value }))}
-                                            placeholder="e.g. 12 months from manufacturing date"
-                                            className={`${inputClass} resize-y`}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label
-                                            htmlFor="details-storageInstructions"
-                                            className="mb-1 block text-xs font-medium text-gray-600"
-                                        >
-                                            Storage Instructions
-                                        </label>
-                                        <textarea
-                                            id="details-storageInstructions"
-                                            rows={2}
-                                            value={details.storageInstructions}
-                                            onChange={event => setDetails(prev => ({ ...prev, storageInstructions: event.target.value }))}
-                                            placeholder="e.g. Store in a cool, dry place"
-                                            className={`${inputClass} resize-y`}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label
-                                            htmlFor="details-ingredients"
-                                            className="mb-1 block text-xs font-medium text-gray-600"
-                                        >
-                                            Ingredients
-                                        </label>
-                                        <textarea
-                                            id="details-ingredients"
-                                            rows={2}
-                                            value={details.ingredients}
-                                            onChange={event => setDetails(prev => ({ ...prev, ingredients: event.target.value }))}
-                                            placeholder="List of ingredients..."
-                                            className={`${inputClass} resize-y`}
-                                        />
-                                    </div>
+                        <div className="mt-3">
+                            <label className={labelClass}>
+                                Product Details
+                            </label>
+                            <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-4">
+                                <div>
+                                    <label
+                                        htmlFor="details-description"
+                                        className="mb-1 block text-xs font-medium text-gray-600"
+                                    >
+                                        Description
+                                    </label>
+                                    <textarea
+                                        id="details-description"
+                                        rows={2}
+                                        value={details.description}
+                                        onChange={event => setDetails(prev => ({ ...prev, description: event.target.value }))}
+                                        placeholder="Product description..."
+                                        className={`${inputClass} resize-y`}
+                                    />
+                                </div>
+                                <div>
+                                    <label
+                                        htmlFor="details-shelfLife"
+                                        className="mb-1 block text-xs font-medium text-gray-600"
+                                    >
+                                        Shelf Life
+                                    </label>
+                                    <textarea
+                                        id="details-shelfLife"
+                                        rows={2}
+                                        value={details.shelfLife}
+                                        onChange={event => setDetails(prev => ({ ...prev, shelfLife: event.target.value }))}
+                                        placeholder="e.g. 12 months from manufacturing date"
+                                        className={`${inputClass} resize-y`}
+                                    />
+                                </div>
+                                <div>
+                                    <label
+                                        htmlFor="details-storageInstructions"
+                                        className="mb-1 block text-xs font-medium text-gray-600"
+                                    >
+                                        Storage Instructions
+                                    </label>
+                                    <textarea
+                                        id="details-storageInstructions"
+                                        rows={2}
+                                        value={details.storageInstructions}
+                                        onChange={event => setDetails(prev => ({ ...prev, storageInstructions: event.target.value }))}
+                                        placeholder="e.g. Store in a cool, dry place"
+                                        className={`${inputClass} resize-y`}
+                                    />
+                                </div>
+                                <div>
+                                    <label
+                                        htmlFor="details-ingredients"
+                                        className="mb-1 block text-xs font-medium text-gray-600"
+                                    >
+                                        Ingredients
+                                    </label>
+                                    <textarea
+                                        id="details-ingredients"
+                                        rows={2}
+                                        value={details.ingredients}
+                                        onChange={event => setDetails(prev => ({ ...prev, ingredients: event.target.value }))}
+                                        placeholder="List of ingredients..."
+                                        className={`${inputClass} resize-y`}
+                                    />
                                 </div>
                             </div>
+                        </div>
 
                         <div className="mt-3">
                             <label htmlFor="relatedProducts" className={labelClass}>Related Products</label>
@@ -838,10 +936,10 @@ export default function AddProduct() {
                                                 && !(productData?.productId && option.productId === productData.productId)
                                                 && (!search || optionText.includes(search));
                                         }) && (
-                                            <p className="px-3 py-3 text-sm text-secondary/70">
-                                                {productOptions.length ? 'No matching products found.' : 'No products available.'}
-                                            </p>
-                                        )}
+                                                <p className="px-3 py-3 text-sm text-secondary/70">
+                                                    {productOptions.length ? 'No matching products found.' : 'No products available.'}
+                                                </p>
+                                            )}
                                     </div>
                                 )}
                             </div>
@@ -1160,6 +1258,8 @@ export default function AddProduct() {
                                         </div>
                                     </div>
 
+
+
                                     {/* Offer Price */}
                                     <div className="min-w-0">
                                         <label htmlFor="offerPrice" className={labelClass}>Offer Price</label>
@@ -1174,21 +1274,179 @@ export default function AddProduct() {
                                             />
                                         </div>
                                     </div>
+                                    {/* Scheme Offers */}
+                                    <section className={sectionClass}>
+                                        {heading(DollarSign, 'Scheme Offers')}
 
-                                    {/* Special Price */}
-                                    <div className="min-w-0">
-                                        <label htmlFor="specialPrice" className={labelClass}>Special Price</label>
-                                        <div className="relative">
-                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-secondary/70">₹</span>
-                                            <input
-                                                type="number" id="specialPrice" name="specialPrice"
-                                                value={pricing.specialPrice}
-                                                onChange={(e) => updatePricing('specialPrice', e.target.value)}
-                                                placeholder="0.00" className={`${inputClass} pl-8`}
-                                                min="0" step="0.01"
-                                            />
+                                        <div className="space-y-1">
+
+                                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto] items-end">
+
+                                                <div className="w-full">
+                                                    <label htmlFor="schemeSelect" className={labelClass}>
+                                                        Select Scheme
+                                                    </label>
+
+                                                    <div className="relative">
+                                                        <select
+                                                            id="schemeSelect"
+                                                            value={selectedSchemeId}
+                                                            onChange={event =>
+                                                                setSelectedSchemeId(event.target.value)
+                                                            }
+                                                            disabled={schemeLoading}
+                                                            className={`${inputClass} appearance-none pr-9`}
+                                                        >
+                                                            <option value="">
+                                                                {schemeLoading
+                                                                    ? 'Loading schemes...'
+                                                                    : 'Choose a scheme'}
+                                                            </option>
+
+                                                            {schemeOptions
+                                                                .filter(scheme =>
+                                                                    !selectedSchemes.some(
+                                                                        selected =>
+                                                                            selected.schemeId === scheme.schemeId
+                                                                    )
+                                                                )
+                                                                .map(scheme => (
+                                                                    <option
+                                                                        key={scheme.schemeId}
+                                                                        value={scheme.schemeId}
+                                                                    >
+                                                                        {scheme.schemeName}
+                                                                    </option>
+                                                                ))}
+                                                        </select>
+
+                                                        <ChevronDown
+                                                            size={15}
+                                                            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-secondary/60"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {/* Offer Price */}
+                                                <div className="w-full">
+                                                    <label htmlFor="schemeOfferPrice" className={labelClass}>
+                                                        Offer Price
+                                                    </label>
+
+                                                    <div className="relative">
+                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-secondary/70">
+                                                            ₹
+                                                        </span>
+
+                                                        <input
+                                                            type="number"
+                                                            id="schemeOfferPrice"
+                                                            value={schemeOfferPrice}
+                                                            onChange={event =>
+                                                                setSchemeOfferPrice(event.target.value)
+                                                            }
+                                                            placeholder="Enter offer price"
+                                                            min="0"
+                                                            step="0.01"
+                                                            className={`${inputClass} !pl-8`}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {/* Add Button */}
+                                                <button
+                                                    type="button"
+                                                    onClick={addSelectedScheme}
+                                                    disabled={
+                                                        !selectedSchemeId ||
+                                                        !schemeOfferPrice ||
+                                                        Number(schemeOfferPrice) <= 0 ||
+                                                        schemeLoading
+                                                    }
+                                                    className="flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-white transition hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                                                >
+                                                    <Plus size={15} />
+                                                    Add
+                                                </button>
+                                            </div>
+
+                                            {/* Added Schemes */}
+                                            {selectedSchemes.length > 0 && (
+                                                <div className="space-y-1 pt-1">
+
+                                                    <div className="flex items-center justify-between">
+                                                        <p className="text-xs font-semibold text-secondary/70">
+                                                            Added Schemes
+                                                        </p>
+
+                                                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                                                            {selectedSchemes.length} Added
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="space-y-2">
+                                                        {selectedSchemes.map((selectedScheme, index) => {
+                                                            const scheme = schemeOptions.find(
+                                                                item =>
+                                                                    item.schemeId === selectedScheme.schemeId
+                                                            );
+
+                                                            return (
+                                                                <div
+                                                                    key={selectedScheme.schemeId}
+                                                                    className="flex items-center justify-between gap-3 rounded-lg border border-tertiary/40 bg-slate-50/60 px-3 py-2 transition hover:border-primary/30"
+                                                                >
+                                                                    {/* Scheme Name */}
+                                                                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                                                                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-[11px] font-bold text-primary">
+                                                                            {index + 1}
+                                                                        </span>
+
+                                                                        <h4 className="truncate text-xs font-semibold text-gray-900">
+                                                                            {scheme?.schemeName || 'Scheme'}
+                                                                        </h4>
+                                                                    </div>
+
+                                                                    {/* Offer Price */}
+                                                                    <div className="flex shrink-0 items-center gap-1.5">
+                                                                        <span className="text-xs text-secondary/60">
+                                                                            Offer:
+                                                                        </span>
+
+                                                                        <span className="text-sm font-semibold text-gray-800">
+                                                                            ₹{Number(selectedScheme.offerPrice || 0).toFixed(2)}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    {/* Delete */}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() =>
+                                                                            removeSelectedScheme(
+                                                                                selectedScheme.schemeId
+                                                                            )
+                                                                        }
+                                                                        aria-label="Delete scheme"
+                                                                        title="Delete scheme"
+                                                                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-rose-500 transition hover:bg-rose-50"
+                                                                    >
+                                                                        <Trash2 size={14} />
+                                                                    </button>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Empty State */}
+                                            {selectedSchemes.length === 0 && (
+                                                <p className="py-2 text-center text-xs text-secondary/50">
+                                                    No schemes added yet.
+                                                </p>
+                                            )}
                                         </div>
-                                    </div>
+                                    </section>
 
                                 </div>
                             </div>

@@ -11,6 +11,8 @@ const productTypes = db.collection("productTypes");
 const deliveryCharges = db.collection("deliveryCharges");
 const banners = db.collection("banners");
 const sections = db.collection("sections");
+const schemes = db.collection("schemes");
+
 // Common helpers
 const validate = (schema, data) => {
   const {error, value} = schema.validate(data, {
@@ -1126,5 +1128,176 @@ export const manageSection = callableWrapper(async (req) => {
     }
   } catch (error) {
     return fail(error, "Section operation failed");
+  }
+});
+
+// =====================================================
+// SCHEME MANAGEMENT
+// =====================================================
+const schemeCounter = db.collection("counters").doc("schemes");
+
+const schemeSchema = Joi.object({
+  schemeName: Joi.string().trim().required(),
+});
+
+const updateSchemeSchema = Joi.object({
+  schemeId: Joi.string().trim().required(),
+  schemeName: Joi.string().trim().required(),
+});
+
+const deleteSchemeSchema = Joi.object({
+  schemeId: Joi.string().trim().required(),
+});
+
+export const manageScheme = callableWrapper(async (req) => {
+  try {
+    requireAuth(req);
+
+    const action = getAction(req);
+    const fields = getFields(req);
+
+    if (action === "add") {
+      const result = validate(schemeSchema, fields);
+
+      if (!result.success) return result;
+
+      const {schemeName} = result.data;
+
+      const schemeRef = schemes.doc();
+
+      const order = await db.runTransaction(async (transaction) => {
+        const duplicateQuery = schemes.where("schemeName", "==", schemeName);
+
+        const duplicateSnapshot = await transaction.get(duplicateQuery);
+
+        if (!duplicateSnapshot.empty) {
+          throw new Error("Scheme name already exists");
+        }
+        const counterDoc = await transaction.get(schemeCounter);
+
+        let nextOrder = 1;
+        if (counterDoc.exists) {
+          nextOrder = (counterDoc.data().lastOrder || 0) + 1;
+        } else {
+          // Initialize counter from existing schemes
+          const existingSchemes = await transaction.get(schemes);
+
+          const maxOrder = existingSchemes.docs.reduce(
+              (max, doc) => Math.max(max, doc.data().order || 0),
+              0,
+          );
+
+          nextOrder = maxOrder + 1;
+        }
+        transaction.set(schemeRef, {
+          schemeId: schemeRef.id,
+          schemeName,
+          order: nextOrder,
+          createAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        transaction.set(schemeCounter, {
+          lastOrder: nextOrder,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        return nextOrder;
+      });
+
+      return {
+        success: true,
+        message: "Scheme added successfully",
+        schemeId: schemeRef.id,
+        order,
+      };
+    }
+
+    if (action === "update") {
+      const result = validate(updateSchemeSchema, fields);
+
+      if (!result.success) return result;
+
+      const {schemeId, schemeName} = result.data;
+
+      const schemeRef = schemes.doc(schemeId);
+
+      const updateResult = await db.runTransaction(async (transaction) => {
+        const schemeDoc = await transaction.get(schemeRef);
+
+        if (!schemeDoc.exists) {
+          throw new Error("Scheme not found");
+        }
+        const duplicateQuery = schemes.where("schemeName", "==", schemeName);
+
+        const duplicateSnapshot = await transaction.get(duplicateQuery);
+
+        const duplicateExists = duplicateSnapshot.docs.some(
+            (doc) => doc.id !== schemeId,
+        );
+
+        if (duplicateExists) {
+          throw new Error("Scheme name already exists");
+        }
+
+        transaction.update(schemeRef, {
+          schemeName,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        return schemeDoc.data().order;
+      });
+
+      return {
+        success: true,
+        message: "Scheme updated successfully",
+        schemeId,
+        order: updateResult,
+      };
+    }
+    if (action === "delete") {
+      const result = validate(deleteSchemeSchema, fields);
+
+      if (!result.success) return result;
+
+      const {schemeId} = result.data;
+
+      const schemeRef = schemes.doc(schemeId);
+
+      const schemeDoc = await schemeRef.get();
+
+      if (!schemeDoc.exists) {
+        return {
+          success: false,
+          message: "Scheme not found",
+        };
+      }
+
+      await schemeRef.delete();
+
+      return {
+        success: true,
+        message: "Scheme deleted successfully",
+      };
+    }
+    if (action === "list") {
+      const snapshot = await schemes.orderBy("order", "asc").get();
+
+      const data = snapshot.docs.map((doc) => ({
+        ...doc.data(),
+        schemeId: doc.id,
+      }));
+
+      return {
+        success: true,
+        data,
+      };
+    }
+
+    return {
+      success: false,
+      message: "Invalid scheme action",
+    };
+  } catch (error) {
+    return fail(error, "Scheme operation failed");
   }
 });
