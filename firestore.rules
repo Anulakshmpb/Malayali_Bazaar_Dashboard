@@ -57,9 +57,29 @@ service cloud.firestore {
     match /delivery_settings/{id} {
       allow read: if true;
       allow write: if isAdmin();
+
+      match /{document=**} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
     }
 
     match /deliveryCharges/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /delivery_places/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /deliveryPlaces/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /places/{id} {
       allow read: if true;
       allow write: if isAdmin();
     }
@@ -134,6 +154,11 @@ service cloud.firestore {
       match /{document=**} {
         allow read, write: if isAdmin();
       }
+    }
+
+    // Ledger payment transactions and receipts
+    match /ledger_payments/{id} {
+      allow read, write: if isAdmin();
     }
 
     // System configurations and auto-increment counters

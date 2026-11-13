@@ -68,6 +68,7 @@ export const onOrderAnalyticsTrigger = onDocumentWritten(
         batch.set(overviewRef, {
           totalRevenue: FieldValue.increment(revenue * multiplier),
           totalProfit: FieldValue.increment(profit * multiplier),
+          netProfit: FieldValue.increment(profit * multiplier),
           totalOrders: FieldValue.increment(1 * multiplier),
           itemsSold: FieldValue.increment(totalUnits * multiplier),
           grossSubtotal: FieldValue.increment(grossSubtotal * multiplier),
