@@ -3,6 +3,7 @@ import {
     FaBuilding,
     FaCalendarAlt,
     FaCheckCircle,
+    FaDatabase,
     FaFileAlt,
     FaPrint,
     FaSyncAlt,
@@ -15,6 +16,8 @@ import {
     FaPercentage,
     FaRedoAlt,
 } from "react-icons/fa";
+import { seedAnalyticsAndReports } from "../../Shared/utils/seedAnalyticsData";
+import { useToast } from "../../Shared/hooks/ToastContext";
 
 const MOCK_REPORT = {
     totalRevenue: 45231.5,
@@ -218,6 +221,7 @@ function StatusBadge({ status }) {
 }
 
 export default function Report() {
+    const { showToast } = useToast();
     const today = new Date();
     const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
@@ -227,6 +231,25 @@ export default function Report() {
     const [fromDate, setFromDate] = useState(initialFromDate);
     const [toDate, setToDate] = useState(initialToDate);
     const [loading, setLoading] = useState(false);
+    const [seeding, setSeeding] = useState(false);
+
+    const handleSeedData = async () => {
+        if (seeding) return;
+        setSeeding(true);
+        try {
+            const res = await seedAnalyticsAndReports();
+            if (res.success) {
+                showToast("Sample report & analytics data seeded in Firestore!", "success");
+            } else {
+                showToast(res.error || "Failed to seed report data.", "error");
+            }
+        } catch (err) {
+            console.error("Seeding error:", err);
+            showToast(err.message || "An unexpected error occurred while seeding.", "error");
+        } finally {
+            setSeeding(false);
+        }
+    };
 
     const [generatedRange, setGeneratedRange] = useState({
         from: initialFromDate,
@@ -414,6 +437,17 @@ export default function Report() {
               />
               {loading ? "Generating..." : "Generate"}
             </button> */}
+                        <button
+                            type="button"
+                            onClick={handleSeedData}
+                            disabled={seeding}
+                            className="inline-flex h-10 items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 text-xs font-bold text-indigo-700 shadow-sm transition hover:bg-indigo-100 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                            title="Seed sample financial report & analytics collections to Firestore"
+                        >
+                            <FaDatabase size={13} className={seeding ? "animate-spin" : "text-indigo-600"} />
+                            <span>{seeding ? "Seeding DB..." : "Seed Database"}</span>
+                        </button>
+
                         <button
                             type="button"
                             onClick={exportCsv}

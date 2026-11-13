@@ -1,0 +1,180 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: Checks if the caller is an Admin via auth claim OR entry in adminUsers collection
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.admin == true ||
+        exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid))
+      );
+    }
+
+    // ==========================================
+    // Public Storefront & Catalog Collections
+    // ==========================================
+    match /banners/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /brand/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /category/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /subCategory/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /productTypes/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /products/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /sections/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /schemes/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /delivery_settings/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /deliveryCharges/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /websiteManagement/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ==========================================
+    // Admin & Permissions Management
+    // ==========================================
+    match /permissions/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /adminUsers/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ==========================================
+    // Notifications & Templates
+    // ==========================================
+    match /admin_notification/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    match /notification_templates/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    match /_notificationCampaigns/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // ==========================================
+    // Analytics & Financial Reporting Collections
+    // ==========================================
+    // High-level KPI summaries (/analytics/overview, /analytics/products)
+    match /analytics/{id} {
+      allow read, write: if isAdmin();
+
+      match /{document=**} {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    // Daily & Monthly performance rollups (/analytics_time_series/daily_*, monthly_*)
+    match /analytics_time_series/{id} {
+      allow read, write: if isAdmin();
+
+      match /{document=**} {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    // Product-wise sales performance
+    match /analytics_products/{id} {
+      allow read, write: if isAdmin();
+
+      match /{document=**} {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    // Financial debtor & customer ledger records
+    match /user_ledgers/{id} {
+      allow read, write: if isAdmin();
+
+      match /{document=**} {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    // System configurations and auto-increment counters
+    match /configurations/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    match /counters/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // ==========================================
+    // Orders
+    // ==========================================
+    match /orders/{orderId} {
+      // Admins have full access; Customers can read their own orders and place new orders
+      allow read: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin() || (request.auth != null && request.resource.data.userId == request.auth.uid);
+      allow update, delete: if isAdmin();
+
+      match /{document=**} {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    // ==========================================
+    // Users: own document and all nested subcollections
+    // ==========================================
+    match /users/{userId} {
+      allow read, write: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+
+      match /{document=**} {
+        allow read, write: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+      }
+    }
+
+    // ==========================================
+    // Deny everything else by default
+    // ==========================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -20,6 +20,14 @@ import {
 import {
   manageWebsiteManagement,
 } from "./src/WebsiteManagement/webManage.callable.js";
+import {
+  manageAnalytics,
+} from "./src/Analytics/analytics.callable.js";
+import {
+  onOrderAnalyticsTrigger,
+  onProductAnalyticsTrigger,
+  onUserAnalyticsTrigger,
+} from "./src/Analytics/analytics.triggers.js";
 import {sendPushNotification,
   syncNotificationTopics,
 } from "./src/Notification/notification.js";
@@ -38,6 +46,10 @@ export {manageAdmin,
   addNewUser,
   manageWebsiteManagement,
   manageScheme,
+  manageAnalytics,
+  onOrderAnalyticsTrigger,
+  onProductAnalyticsTrigger,
+  onUserAnalyticsTrigger,
   sendPushNotification,
   syncNotificationTopics,
 };

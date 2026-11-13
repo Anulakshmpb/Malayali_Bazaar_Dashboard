@@ -15,10 +15,13 @@ import {
     FaBox,
     FaCalendarAlt,
     FaChartLine,
+    FaDatabase,
     FaDownload,
     FaShoppingBag,
     FaWallet,
 } from "react-icons/fa";
+import { seedAnalyticsAndReports } from "../../Shared/utils/seedAnalyticsData";
+import { useToast } from "../../Shared/hooks/ToastContext";
 
 const WEEKLY_DATA = [
     { time: "Mon", revenue: 12600, profit: 3650, orders: 67 },
@@ -133,7 +136,27 @@ function AnalyticsChart({ title, subtitle, data, revColor, profColor }) {
 
 // ── Main component ────────────────────────────────────────────────
 export default function Analytics() {
+    const { showToast } = useToast();
     const [period, setPeriod] = useState("6months");
+    const [seeding, setSeeding] = useState(false);
+
+    const handleSeedData = async () => {
+        if (seeding) return;
+        setSeeding(true);
+        try {
+            const res = await seedAnalyticsAndReports();
+            if (res.success) {
+                showToast("Sample analytics data & collections seeded in Firestore!", "success");
+            } else {
+                showToast(res.error || "Failed to seed analytics data.", "error");
+            }
+        } catch (err) {
+            console.error("Seeding error:", err);
+            showToast(err.message || "An unexpected error occurred while seeding.", "error");
+        } finally {
+            setSeeding(false);
+        }
+    };
 
     const visibleMonthly = useMemo(() => {
         if (period === "3months") return ALL_MONTHLY.slice(-3);
@@ -195,6 +218,16 @@ export default function Analytics() {
                                 <option value="6months">Last 6 months</option>
                             </select>
                         </label>
+                        <button
+                            type="button"
+                            onClick={handleSeedData}
+                            disabled={seeding}
+                            className="inline-flex h-10 items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 text-xs font-bold text-indigo-700 shadow-sm transition hover:bg-indigo-100 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                            title="Seed sample analytics collections to Firestore"
+                        >
+                            <FaDatabase size={13} className={seeding ? "animate-spin" : "text-indigo-600"} />
+                            <span>{seeding ? "Seeding DB..." : "Seed Analytics DB"}</span>
+                        </button>
                         <button
                             type="button"
                             onClick={exportCsv}
