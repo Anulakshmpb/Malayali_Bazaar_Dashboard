@@ -1,9 +1,9 @@
 import Joi from "joi";
 import {FieldValue} from "firebase-admin/firestore";
 import {getMessaging} from "firebase-admin/messaging";
-import {db} from "../shared/config.js";
-import {callableWrapper} from "../shared/callable.wrapper.js";
-import {logInfo} from "../shared/logger.js";
+import {db} from "../../shared/config.js";
+import {callableWrapper} from "../../shared/callable.wrapper.js";
+import {logInfo} from "../../shared/logger.js";
 
 const TOKEN_BATCH_SIZE = 500;
 const FIRESTORE_BATCH_SIZE = 450;

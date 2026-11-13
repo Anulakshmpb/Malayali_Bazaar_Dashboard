@@ -1,77 +1,24 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-    FaBuilding,
     FaCalendarAlt,
     FaCheckCircle,
-    FaDatabase,
     FaFileAlt,
     FaPrint,
     FaSyncAlt,
     FaShoppingBag,
     FaChartLine,
     FaWallet,
-    FaArrowRight,
     FaBoxOpen,
     FaReceipt,
     FaPercentage,
     FaRedoAlt,
 } from "react-icons/fa";
-import { seedAnalyticsAndReports } from "../../Shared/utils/seedAnalyticsData";
-import { useToast } from "../../Shared/hooks/ToastContext";
-
-const MOCK_REPORT = {
-    totalRevenue: 45231.5,
-    netProfit: 12450.75,
-    totalOrders: 1284,
-    itemsSold: 8214,
-    grossSubtotal: 43800,
-    taxCollected: 2630.5,
-    deliveryCharges: 840,
-    discounts: 2039,
-    costOfGoods: 32780.75,
-    orders: [
-        {
-            id: "ORD-1048",
-            date: "2026-10-12",
-            customer: "Aarav Nair",
-            items: 6,
-            amount: 245.5,
-            status: "Delivered",
-        },
-        {
-            id: "ORD-1047",
-            date: "2026-10-12",
-            customer: "Maya Thomas",
-            items: 4,
-            amount: 182,
-            status: "Delivered",
-        },
-        {
-            id: "ORD-1046",
-            date: "2026-10-11",
-            customer: "Noah Mathew",
-            items: 8,
-            amount: 395.75,
-            status: "Processing",
-        },
-        {
-            id: "ORD-1045",
-            date: "2026-10-10",
-            customer: "Diya Joseph",
-            items: 3,
-            amount: 126.25,
-            status: "Delivered",
-        },
-        {
-            id: "ORD-1044",
-            date: "2026-10-09",
-            customer: "Ibrahim Khan",
-            items: 5,
-            amount: 318,
-            status: "Cancelled",
-        },
-    ],
-};
+import { 
+    doc, 
+    collection, 
+    onSnapshot 
+} from "firebase/firestore";
+import { db } from "../../Config/Firebase";
 
 const currency = (value) =>
     new Intl.NumberFormat("en-IN", {
@@ -195,25 +142,28 @@ function SummaryRow({ label, value, valueClass = "text-gray-900" }) {
 function StatusBadge({ status }) {
     const statusClasses = {
         Delivered: "bg-emerald-50 text-emerald-700 ring-emerald-600/10",
+        Completed: "bg-emerald-50 text-emerald-700 ring-emerald-600/10",
         Processing: "bg-amber-50 text-amber-700 ring-amber-600/10",
         Cancelled: "bg-rose-50 text-rose-700 ring-rose-600/10",
     };
 
     const dotClasses = {
         Delivered: "bg-emerald-500",
+        Completed: "bg-emerald-500",
         Processing: "bg-amber-500",
         Cancelled: "bg-rose-500",
     };
 
     return (
         <span
-            className={`inline-flex items-center gap-2 whitespace-nowrap rounded-full px-3 py-1.5 text-[11px] font-bold ring-1 ring-inset ${statusClasses[status] ||
-                "bg-slate-100 text-slate-600 ring-slate-200"
-                }`}
+            className={`inline-flex items-center gap-2 whitespace-nowrap rounded-full px-3 py-1.5 text-[11px] font-bold ring-1 ring-inset ${
+                statusClasses[status] || "bg-slate-100 text-slate-600 ring-slate-200"
+            }`}
         >
             <span
-                className={`h-1.5 w-1.5 rounded-full ${dotClasses[status] || "bg-slate-400"
-                    }`}
+                className={`h-1.5 w-1.5 rounded-full ${
+                    dotClasses[status] || "bg-slate-400"
+                }`}
             />
             {status}
         </span>
@@ -221,7 +171,6 @@ function StatusBadge({ status }) {
 }
 
 export default function Report() {
-    const { showToast } = useToast();
     const today = new Date();
     const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
@@ -231,25 +180,80 @@ export default function Report() {
     const [fromDate, setFromDate] = useState(initialFromDate);
     const [toDate, setToDate] = useState(initialToDate);
     const [loading, setLoading] = useState(false);
-    const [seeding, setSeeding] = useState(false);
 
-    const handleSeedData = async () => {
-        if (seeding) return;
-        setSeeding(true);
-        try {
-            const res = await seedAnalyticsAndReports();
-            if (res.success) {
-                showToast("Sample report & analytics data seeded in Firestore!", "success");
-            } else {
-                showToast(res.error || "Failed to seed report data.", "error");
+    // Live data states
+    const [overviewData, setOverviewData] = useState(null);
+    const [liveOrders, setLiveOrders] = useState([]);
+
+    // 1. Fetch overview summary from /analytics/overview
+    useEffect(() => {
+        const unsubscribe = onSnapshot(
+            doc(db, "analytics", "overview"),
+            (docSnap) => {
+                if (docSnap.exists()) {
+                    setOverviewData(docSnap.data());
+                }
+            },
+            (error) => {
+                console.warn("Analytics overview subscription warning:", error.message);
             }
-        } catch (err) {
-            console.error("Seeding error:", err);
-            showToast(err.message || "An unexpected error occurred while seeding.", "error");
-        } finally {
-            setSeeding(false);
-        }
-    };
+        );
+
+        return () => unsubscribe();
+    }, []);
+
+    // 2. Fetch all orders from /orders collection
+    useEffect(() => {
+        const unsubscribe = onSnapshot(
+            collection(db, "orders"),
+            (snapshot) => {
+                if (!snapshot.empty) {
+                    const list = snapshot.docs.map((docSnap) => {
+                        const data = docSnap.data();
+                        let orderDate = data.orderDate;
+                        if (!orderDate && data.createdAt?.toDate) {
+                            orderDate = toInputDate(data.createdAt.toDate());
+                        }
+
+                        const items = Array.isArray(data.items) ? data.items : [];
+                        const totalUnits = items.reduce((sum, i) => sum + Number(i.quantity || 1), 0) || Number(data.totalItems || 1);
+                        const revenue = Number(data.totalAmount || data.total || 0);
+                        const grossSubtotal = Number(data.grossSubtotal || data.subtotal || revenue);
+                        const tax = Number(data.taxCollected || data.tax || 0);
+                        const delivery = Number(data.deliveryCharge || data.deliveryCharges || data.shipping || 0);
+                        const discount = Number(data.discount || 0);
+                        const cogs = Number(data.costOfGoods || 0);
+                        const profit = Number(data.netProfit ?? (revenue - cogs));
+
+                        return {
+                            id: data.orderId || docSnap.id,
+                            date: orderDate || toInputDate(new Date()),
+                            customer: data.customerName || data.customer || "Customer",
+                            items: totalUnits,
+                            amount: revenue,
+                            grossSubtotal,
+                            taxCollected: tax,
+                            deliveryCharges: delivery,
+                            discounts: discount,
+                            costOfGoods: cogs,
+                            netProfit: profit,
+                            status: data.status || "Delivered",
+                        };
+                    });
+
+                    list.sort((a, b) => b.date.localeCompare(a.date));
+                    setLiveOrders(list);
+                } else {
+                    setLiveOrders([]);
+                }
+            },
+            (error) => {
+                console.warn("Orders subscription warning:", error.message);
+            }
+        );
+
+        return () => unsubscribe();
+    }, []);
 
     const [generatedRange, setGeneratedRange] = useState({
         from: initialFromDate,
@@ -257,17 +261,51 @@ export default function Report() {
     });
 
     const report = useMemo(() => {
-        const filteredOrders = MOCK_REPORT.orders.filter(
+        const filteredOrders = liveOrders.filter(
             (order) =>
                 order.date >= generatedRange.from &&
                 order.date <= generatedRange.to
         );
 
+        if (filteredOrders.length > 0) {
+            const totalRevenue = filteredOrders.reduce((sum, o) => sum + o.amount, 0);
+            const netProfit = filteredOrders.reduce((sum, o) => sum + o.netProfit, 0);
+            const totalOrders = filteredOrders.length;
+            const itemsSold = filteredOrders.reduce((sum, o) => sum + o.items, 0);
+            const grossSubtotal = filteredOrders.reduce((sum, o) => sum + o.grossSubtotal, 0);
+            const taxCollected = filteredOrders.reduce((sum, o) => sum + o.taxCollected, 0);
+            const deliveryCharges = filteredOrders.reduce((sum, o) => sum + o.deliveryCharges, 0);
+            const discounts = filteredOrders.reduce((sum, o) => sum + o.discounts, 0);
+            const costOfGoods = filteredOrders.reduce((sum, o) => sum + o.costOfGoods, 0);
+
+            return {
+                totalRevenue,
+                netProfit,
+                totalOrders,
+                itemsSold,
+                grossSubtotal,
+                taxCollected,
+                deliveryCharges,
+                discounts,
+                costOfGoods,
+                filteredOrders,
+            };
+        }
+
+        // When no orders exist in selected date range
         return {
-            ...MOCK_REPORT,
-            filteredOrders,
+            totalRevenue: 0,
+            netProfit: 0,
+            totalOrders: 0,
+            itemsSold: 0,
+            grossSubtotal: 0,
+            taxCollected: 0,
+            deliveryCharges: 0,
+            discounts: 0,
+            costOfGoods: 0,
+            filteredOrders: [],
         };
-    }, [generatedRange]);
+    }, [generatedRange, liveOrders]);
 
     const handleGenerate = () => {
         if (loading) return;
@@ -346,22 +384,22 @@ export default function Report() {
     const kpis = [
         {
             title: "Total Sales Revenue",
-            value: currency(report.totalRevenue),
+            value: currency(report.totalRevenue || overviewData?.totalRevenue || 0),
             caption: "Revenue for selected period",
             icon: FaWallet,
             iconClass: "bg-primary/15 text-gray-900",
         },
         {
             title: "Net Profit",
-            value: currency(report.netProfit),
+            value: currency(report.netProfit || overviewData?.netProfit || overviewData?.totalProfit || 0),
             caption: "After product costs",
             icon: FaChartLine,
             iconClass: "bg-emerald-50 text-emerald-700",
         },
         {
             title: "Total Orders",
-            value: report.totalOrders.toLocaleString("en-IN"),
-            caption: `${report.itemsSold.toLocaleString("en-IN")} items sold`,
+            value: Number(report.totalOrders || overviewData?.totalOrders || 0).toLocaleString("en-IN"),
+            caption: `${Number(report.itemsSold || overviewData?.itemsSold || 0).toLocaleString("en-IN")} items sold`,
             icon: FaShoppingBag,
             iconClass: "bg-tertiary/30 text-secondary",
         },
@@ -389,9 +427,12 @@ export default function Report() {
                 {/* Page heading and date filters */}
                 <header className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between print:hidden">
                     <div>
-
-                        <h1 className="text-3xl font-bold bg-gradient-to-br from-gray-900 to-secondary text-transparent bg-clip-text">Financial Reports
+                        <h1 className="text-3xl font-bold bg-gradient-to-br from-gray-900 to-secondary text-transparent bg-clip-text">
+                            Financial Reports
                         </h1>
+                        <p className="mt-1 text-xs text-secondary/70">
+                            Comprehensive P&L breakdown, tax, shipping, and transaction audits
+                        </p>
                     </div>
 
                     <div className="flex flex-wrap items-end gap-3">
@@ -425,27 +466,17 @@ export default function Report() {
                             />
                         </label>
 
-                        {/* <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={loading}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-gray-800 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <FaSyncAlt
-                size={12}
-                className={loading ? "animate-spin" : ""}
-              />
-              {loading ? "Generating..." : "Generate"}
-            </button> */}
                         <button
                             type="button"
-                            onClick={handleSeedData}
-                            disabled={seeding}
-                            className="inline-flex h-10 items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 text-xs font-bold text-indigo-700 shadow-sm transition hover:bg-indigo-100 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
-                            title="Seed sample financial report & analytics collections to Firestore"
+                            onClick={handleGenerate}
+                            disabled={loading}
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 text-xs font-bold text-white shadow-sm transition hover:bg-gray-800 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                            <FaDatabase size={13} className={seeding ? "animate-spin" : "text-indigo-600"} />
-                            <span>{seeding ? "Seeding DB..." : "Seed Database"}</span>
+                            <FaSyncAlt
+                                size={12}
+                                className={loading ? "animate-spin" : ""}
+                            />
+                            {loading ? "Generating..." : "Generate"}
                         </button>
 
                         <button
@@ -488,11 +519,10 @@ export default function Report() {
 
                 {/* Main report card */}
                 <section
-                    className={`overflow-hidden rounded-2xl border border-tertiary/30 bg-white shadow-sm print:rounded-none print:border-0 print:shadow-none ${loading ? "opacity-60" : ""
-                        }`}
+                    className={`overflow-hidden rounded-2xl border border-tertiary/30 bg-white shadow-sm print:rounded-none print:border-0 print:shadow-none ${
+                        loading ? "opacity-60" : ""
+                    }`}
                 >
-
-
                     <div className="space-y-8 p-5 sm:p-8">
                         {loading && (
                             <div className="flex items-center justify-center gap-3 rounded-xl border border-tertiary/30 bg-slate-50 py-4 text-sm font-semibold text-secondary">
@@ -506,7 +536,7 @@ export default function Report() {
                             <SectionHeading
                                 number="01"
                                 title="Operational overview"
-
+                                description="High-level order count and sales volume for the selected timeframe."
                             />
 
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -519,7 +549,7 @@ export default function Report() {
                                     </div>
 
                                     <p className="mt-3 text-2xl font-bold text-gray-900">
-                                        {report.totalOrders.toLocaleString("en-IN")}
+                                        {Number(report.totalOrders).toLocaleString("en-IN")}
                                     </p>
 
                                     <p className="mt-1 text-[11px] text-secondary/60">
@@ -536,7 +566,7 @@ export default function Report() {
                                     </div>
 
                                     <p className="mt-3 text-2xl font-bold text-gray-900">
-                                        {report.itemsSold.toLocaleString("en-IN")}
+                                        {Number(report.itemsSold).toLocaleString("en-IN")}
                                     </p>
 
                                     <p className="mt-1 text-[11px] text-secondary/60">
@@ -707,11 +737,12 @@ export default function Report() {
                                 <SectionHeading
                                     number="04"
                                     title="Recent orders"
+                                    description="Line-item audit of orders falling within the selected date range."
                                 />
 
                                 <span className="inline-flex w-fit shrink-0 items-center gap-2 rounded-lg border border-tertiary/30 bg-slate-50 px-3 py-2 text-xs font-semibold text-secondary">
                                     <FaReceipt size={12} />
-                                    {report.filteredOrders.length} sample records
+                                    {report.filteredOrders.length} records in range
                                 </span>
                             </div>
 
@@ -787,8 +818,7 @@ export default function Report() {
                                                         </p>
 
                                                         <p className="mt-1 text-xs text-secondary/60">
-                                                            Select a different date range to view available
-                                                            transactions.
+                                                            Select a different date range to view orders.
                                                         </p>
                                                     </td>
                                                 </tr>
@@ -799,12 +829,12 @@ export default function Report() {
 
                                 <div className="flex flex-col gap-2 border-t border-tertiary/30 bg-slate-50/70 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
                                     <p className="text-[11px] text-secondary/60">
-                                        Displaying sample order records for the selected period.
+                                        Displaying {report.filteredOrders.length} order records for the period {dateLabel(generatedRange.from)} to {dateLabel(generatedRange.to)}.
                                     </p>
 
                                     <div className="flex items-center gap-2 text-[11px] font-semibold text-secondary/70">
                                         <FaReceipt size={12} />
-                                        Order status overview
+                                        Order status audit
                                     </div>
                                 </div>
                             </div>
@@ -812,7 +842,7 @@ export default function Report() {
 
                         {/* Footer */}
                         <footer className="flex flex-col gap-2 border-t border-tertiary/30 pt-5 text-[11px] text-secondary/60 sm:flex-row sm:items-center sm:justify-between">
-                            <p>Grocery Store · Financial Report</p>
+                            <p>Malayali Bazaar · Financial Report</p>
 
                             <p>
                                 {dateLabel(generatedRange.from)} –{" "}

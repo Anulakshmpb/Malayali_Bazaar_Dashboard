@@ -21,9 +21,6 @@ import {
   manageWebsiteManagement,
 } from "./src/WebsiteManagement/webManage.callable.js";
 import {
-  manageAnalytics,
-} from "./src/Analytics/analytics.callable.js";
-import {
   onOrderAnalyticsTrigger,
   onProductAnalyticsTrigger,
   onUserAnalyticsTrigger,
@@ -31,6 +28,12 @@ import {
 import {sendPushNotification,
   syncNotificationTopics,
 } from "./src/Notification/notification.js";
+import {
+  recordCustomerPayment,
+} from "./src/CustomerLedger/customerLedger.callable.js";
+import {
+  manageDeliveryPlace,
+} from "./src/Delivery/deliveryPlace.callable.js";
 setGlobalOptions({maxInstances: 10});
 
 export {manageAdmin,
@@ -46,10 +49,11 @@ export {manageAdmin,
   addNewUser,
   manageWebsiteManagement,
   manageScheme,
-  manageAnalytics,
   onOrderAnalyticsTrigger,
   onProductAnalyticsTrigger,
   onUserAnalyticsTrigger,
   sendPushNotification,
   syncNotificationTopics,
+  recordCustomerPayment,
+  manageDeliveryPlace,
 };

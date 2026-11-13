@@ -1,16 +1,12 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Search,
   Users,
   TrendingUp,
   TrendingDown,
-  BookOpen,
-  Phone,
   Eye,
   X,
-  ArrowUpRight,
-  ShoppingBag,
   Wallet,
   RefreshCw,
   ChevronRight,
@@ -18,77 +14,9 @@ import {
   Filter,
   CircleDollarSign,
 } from "lucide-react";
+import { collection, onSnapshot } from "firebase/firestore";
+import { db } from "../../Config/Firebase";
 import CommonTable from "../../Shared/Pages/CommonTable";
-
-
-const MOCK_LEDGER = [
-  {
-    id: "CUS001",
-    uid: "USR-1001",
-    name: "Arun Kumar",
-    mobile: "+91 98765 43210",
-    orders: 18,
-    recievableAmount: 48500,
-    paidAmount: 42000,
-    payableAmount: 6500,
-    updatedAt: new Date("2026-10-12T11:30:00"),
-  },
-  {
-    id: "CUS002",
-    uid: "USR-1002",
-    name: "Priya Nair",
-    mobile: "+91 98470 12345",
-    orders: 12,
-    recievableAmount: 32500,
-    paidAmount: 32500,
-    payableAmount: 0,
-    updatedAt: new Date("2026-10-12T09:15:00"),
-  },
-  {
-    id: "CUS003",
-    uid: "USR-1003",
-    name: "Rahul Menon",
-    mobile: "+91 98950 67890",
-    orders: 24,
-    recievableAmount: 76800,
-    paidAmount: 60000,
-    payableAmount: 16800,
-    updatedAt: new Date("2026-10-11T16:45:00"),
-  },
-  {
-    id: "CUS004",
-    uid: "USR-1004",
-    name: "Sneha Thomas",
-    mobile: "+91 95678 12340",
-    orders: 9,
-    recievableAmount: 21500,
-    paidAmount: 19000,
-    payableAmount: 2500,
-    updatedAt: new Date("2026-10-11T13:20:00"),
-  },
-  {
-    id: "CUS005",
-    uid: "USR-1005",
-    name: "Vishnu Prasad",
-    mobile: "+91 94470 56789",
-    orders: 31,
-    recievableAmount: 95400,
-    paidAmount: 95400,
-    payableAmount: 0,
-    updatedAt: new Date("2026-10-10T14:10:00"),
-  },
-  {
-    id: "CUS008",
-    uid: "USR-1008",
-    name: "Meera Suresh",
-    mobile: "+91 86060 33445",
-    orders: 11,
-    recievableAmount: 28700,
-    paidAmount: 28700,
-    payableAmount: 0,
-    updatedAt: new Date("2026-10-07T15:25:00"),
-  },
-];
 
 // --------------------------------------------------
 // FORMATTERS
@@ -178,7 +106,7 @@ function SummaryCard({
 // CUSTOMER DETAILS MODAL
 // --------------------------------------------------
 
-function ViewModal({ customer, onClose }) {
+function ViewModal({ customer, onClose, onNavigate }) {
   if (!customer) return null;
 
   const details = [
@@ -286,8 +214,9 @@ function ViewModal({ customer, onClose }) {
               <span className="text-sm text-muted">{item.label}</span>
 
               <span
-                className={`max-w-[60%] break-words text-right text-sm font-semibold ${item.color || "text-main"
-                  }`}
+                className={`max-w-[60%] break-words text-right text-sm font-semibold ${
+                  item.color || "text-main"
+                }`}
               >
                 {item.value}
               </span>
@@ -295,11 +224,21 @@ function ViewModal({ customer, onClose }) {
           ))}
         </div>
 
-        <div className="flex justify-end px-5 pb-5 pt-3 sm:px-6">
+        <div className="flex justify-between px-5 pb-5 pt-3 sm:px-6">
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              if (onNavigate) onNavigate(customer.id);
+            }}
+            className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+          >
+            View Account Statement
+          </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-border px-5 py-2.5 text-sm font-semibold text-main transition hover:bg-primary/5"
+            className="rounded-xl border border-border px-5 py-2 text-sm font-semibold text-main transition hover:bg-primary/5"
           >
             Close
           </button>
@@ -316,11 +255,45 @@ function ViewModal({ customer, onClose }) {
 export default function UserLedger() {
   const navigate = useNavigate();
 
-  const [ledger] = useState(MOCK_LEDGER);
+  const [ledger, setLedger] = useState([]);
   const [search, setSearch] = useState("");
   const [viewCustomer, setViewCustomer] = useState(null);
   const [balanceFilter, setBalanceFilter] = useState("all");
   const [sortOrder, setSortOrder] = useState("recent");
+
+  // Fetch real customer ledger documents from /user_ledgers
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      collection(db, "user_ledgers"),
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const list = snapshot.docs.map((docSnap) => {
+            const data = docSnap.data();
+            return {
+              id: docSnap.id,
+              uid: data.uid || docSnap.id,
+              name: data.name || "Customer",
+              mobile: data.phone || data.mobile || "—",
+              orders: Number(data.orders || 0),
+              recievableAmount: Number(data.receivableAmount ?? data.recievableAmount ?? 0),
+              paidAmount: Number(data.paidAmount || 0),
+              payableAmount: Number(data.payableAmount || 0),
+              updatedAt: data.updatedAt || new Date(),
+            };
+          });
+
+          setLedger(list);
+        } else {
+          setLedger([]);
+        }
+      },
+      (error) => {
+        console.warn("User ledger subscription warning:", error.message);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -355,11 +328,11 @@ export default function UserLedger() {
       }
 
       const dateA = a.updatedAt
-        ? new Date(a.updatedAt).getTime()
+        ? (a.updatedAt.toDate ? a.updatedAt.toDate().getTime() : new Date(a.updatedAt).getTime())
         : 0;
 
       const dateB = b.updatedAt
-        ? new Date(b.updatedAt).getTime()
+        ? (b.updatedAt.toDate ? b.updatedAt.toDate().getTime() : new Date(b.updatedAt).getTime())
         : 0;
 
       return dateB - dateA;
@@ -410,9 +383,13 @@ export default function UserLedger() {
           <div className="flex items-start gap-3">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-3xl font-bold bg-gradient-to-br from-gray-900 to-secondary text-transparent bg-clip-text"> Customer Ledger
+                <h1 className="text-3xl font-bold bg-gradient-to-br from-gray-900 to-secondary text-transparent bg-clip-text">
+                  Customer Ledger
                 </h1>
               </div>
+              <p className="mt-1 text-xs text-secondary/70">
+                Track customer order volume, accounts receivable, and outstanding balances
+              </p>
             </div>
           </div>
 
@@ -469,7 +446,6 @@ export default function UserLedger() {
             valueStyle="text-rose-600"
           />
         </section>
-
 
         <section className="overflow-hidden rounded-2xl border border-border bg-card">
 
@@ -665,17 +641,28 @@ export default function UserLedger() {
               emptyMessage="No customers found"
               emptyDescription="Try another search term or change the selected filters."
               actions={(customer) => (
-                <button
-                  type="button"
-                  onClick={() => navigate("/customer-ledger/view/id")}
-                  title="View ledger details"
-                  aria-label={`View ledger details for ${customer.name}`}
-                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-main transition hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
-                >
-                  <Eye size={15} />
-                  View
-                  <ChevronRight size={13} />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setViewCustomer(customer)}
+                    title="Quick preview"
+                    aria-label={`Quick preview for ${customer.name}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-muted transition hover:border-primary/30 hover:bg-primary/5 hover:text-main"
+                  >
+                    <Eye size={14} />
+                    Preview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/customer-ledger/view/${customer.id}`)}
+                    title="View ledger details"
+                    aria-label={`View ledger details for ${customer.name}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary hover:text-white"
+                  >
+                    View
+                    <ChevronRight size={13} />
+                  </button>
+                </div>
               )}
             />
           )}
@@ -715,6 +702,7 @@ export default function UserLedger() {
       <ViewModal
         customer={viewCustomer}
         onClose={() => setViewCustomer(null)}
+        onNavigate={(id) => navigate(`/customer-ledger/view/${id}`)}
       />
     </main>
   );

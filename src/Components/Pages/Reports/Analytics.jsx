@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
     Bar,
     BarChart,
@@ -15,40 +15,18 @@ import {
     FaBox,
     FaCalendarAlt,
     FaChartLine,
-    FaDatabase,
     FaDownload,
     FaShoppingBag,
     FaWallet,
 } from "react-icons/fa";
-import { seedAnalyticsAndReports } from "../../Shared/utils/seedAnalyticsData";
-import { useToast } from "../../Shared/hooks/ToastContext";
-
-const WEEKLY_DATA = [
-    { time: "Mon", revenue: 12600, profit: 3650, orders: 67 },
-    { time: "Tue", revenue: 15300, profit: 4630, orders: 80 },
-    { time: "Wed", revenue: 13900, profit: 4140, orders: 73 },
-    { time: "Thu", revenue: 19000, profit: 5770, orders: 98 },
-    { time: "Fri", revenue: 18700, profit: 5590, orders: 97 },
-    { time: "Sat", revenue: 24300, profit: 7440, orders: 127 },
-    { time: "Sun", revenue: 22100, profit: 6680, orders: 114 },
-];
-
-const ALL_MONTHLY = [
-    { time: "May", revenue: 180000, profit: 53000, orders: 958 },
-    { time: "Jun", revenue: 193400, profit: 58000, orders: 1023 },
-    { time: "Jul", revenue: 186800, profit: 55600, orders: 987 },
-    { time: "Aug", revenue: 210800, profit: 63200, orders: 1112 },
-    { time: "Sep", revenue: 226900, profit: 68300, orders: 1193 },
-    { time: "Oct", revenue: 70431, profit: 19850, orders: 380 },
-];
-
-const PRODUCT_DATA = [
-    { name: "Fresh Whole Milk (1L)",       quantity: 2070, revenue: 144900 },
-    { name: "Farm Fresh Eggs (12 pcs)",    quantity: 1250, revenue: 100000 },
-    { name: "Basmati Rice (5kg)",          quantity: 735,  revenue: 132300 },
-    { name: "Organic Bananas (1kg)",       quantity: 1690, revenue: 84500  },
-    { name: "Whole Wheat Bread",           quantity: 1155, revenue: 57750  },
-];
+import { 
+    doc, 
+    collection, 
+    onSnapshot, 
+    query, 
+    orderBy 
+} from "firebase/firestore";
+import { db } from "../../Config/Firebase";
 
 // ── Helpers ───────────────────────────────────────────────────────
 const currency = (v) =>
@@ -113,22 +91,29 @@ function AnalyticsChart({ title, subtitle, data, revColor, profColor }) {
                 <p className="mt-1 text-xs text-slate-400">{subtitle}</p>
             </div>
             <div className="h-[280px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barGap={4}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" vertical={false} />
-                        <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 12 }} dy={6} />
-                        <YAxis
-                            axisLine={false} tickLine={false}
-                            tick={{ fill: "#cbd5e1", fontSize: 11 }}
-                            tickFormatter={(v) => v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`}
-                            width={54}
-                        />
-                        <Tooltip content={<ChartTooltip />} cursor={{ fill: "#f8fafc", radius: 6 }} />
-                        <Legend verticalAlign="bottom" height={32} iconType="circle" wrapperStyle={{ fontSize: "12px", color: "#64748b" }} />
-                        <Bar dataKey="revenue" name="Revenue" fill={revColor} radius={[6, 6, 0, 0]} maxBarSize={28} />
-                        <Bar dataKey="profit"  name="Profit"  fill={profColor} radius={[6, 6, 0, 0]} maxBarSize={28} />
-                    </BarChart>
-                </ResponsiveContainer>
+                {data && data.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barGap={4}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" vertical={false} />
+                            <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 12 }} dy={6} />
+                            <YAxis
+                                axisLine={false} tickLine={false}
+                                tick={{ fill: "#cbd5e1", fontSize: 11 }}
+                                tickFormatter={(v) => v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`}
+                                width={54}
+                            />
+                            <Tooltip content={<ChartTooltip />} cursor={{ fill: "#f8fafc", radius: 6 }} />
+                            <Legend verticalAlign="bottom" height={32} iconType="circle" wrapperStyle={{ fontSize: "12px", color: "#64748b" }} />
+                            <Bar dataKey="revenue" name="Revenue" fill={revColor} radius={[6, 6, 0, 0]} maxBarSize={28} />
+                            <Bar dataKey="profit"  name="Profit"  fill={profColor} radius={[6, 6, 0, 0]} maxBarSize={28} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                ) : (
+                    <div className="flex h-full flex-col items-center justify-center text-center text-slate-400">
+                        <FaChartLine size={28} className="text-slate-300" />
+                        <p className="mt-2 text-xs font-medium">No performance data recorded for this timeframe</p>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -136,42 +121,138 @@ function AnalyticsChart({ title, subtitle, data, revColor, profColor }) {
 
 // ── Main component ────────────────────────────────────────────────
 export default function Analytics() {
-    const { showToast } = useToast();
     const [period, setPeriod] = useState("6months");
-    const [seeding, setSeeding] = useState(false);
 
-    const handleSeedData = async () => {
-        if (seeding) return;
-        setSeeding(true);
-        try {
-            const res = await seedAnalyticsAndReports();
-            if (res.success) {
-                showToast("Sample analytics data & collections seeded in Firestore!", "success");
-            } else {
-                showToast(res.error || "Failed to seed analytics data.", "error");
+    // Live Firestore data states
+    const [overviewData, setOverviewData] = useState(null);
+    const [weeklyData, setWeeklyData] = useState([]);
+    const [monthlyData, setMonthlyData] = useState([]);
+    const [productsData, setProductsData] = useState([]);
+
+    // 1. Fetch overview document from /analytics/overview
+    useEffect(() => {
+        const unsubscribe = onSnapshot(
+            doc(db, "analytics", "overview"),
+            (docSnap) => {
+                if (docSnap.exists()) {
+                    setOverviewData(docSnap.data());
+                }
+            },
+            (error) => {
+                console.warn("Analytics overview subscription error:", error.message);
             }
-        } catch (err) {
-            console.error("Seeding error:", err);
-            showToast(err.message || "An unexpected error occurred while seeding.", "error");
-        } finally {
-            setSeeding(false);
-        }
-    };
+        );
+        return () => unsubscribe();
+    }, []);
+
+    // 2. Fetch daily & monthly time-series from /analytics_time_series
+    useEffect(() => {
+        const unsubscribe = onSnapshot(
+            collection(db, "analytics_time_series"),
+            (snapshot) => {
+                if (!snapshot.empty) {
+                    const daily = [];
+                    const monthly = [];
+
+                    snapshot.docs.forEach((docSnap) => {
+                        const data = docSnap.data();
+                        const id = docSnap.id;
+
+                        if (id.startsWith("daily_") || data.date) {
+                            daily.push({
+                                id,
+                                date: data.date || id.replace("daily_", ""),
+                                time: data.dayOfWeek || (data.date ? new Date(data.date).toLocaleDateString("en-US", { weekday: "short" }) : "Day"),
+                                revenue: Number(data.revenue || 0),
+                                profit: Number(data.profit || 0),
+                                orders: Number(data.orders || 0),
+                            });
+                        } else if (id.startsWith("monthly_") || data.month) {
+                            monthly.push({
+                                id,
+                                month: data.month || id.replace("monthly_", ""),
+                                time: data.time || (data.month ? new Date(`${data.month}-01`).toLocaleString("en-US", { month: "short" }) : "Month"),
+                                revenue: Number(data.revenue || 0),
+                                profit: Number(data.profit || 0),
+                                orders: Number(data.orders || 0),
+                            });
+                        }
+                    });
+
+                    if (daily.length > 0) {
+                        daily.sort((a, b) => a.date.localeCompare(b.date));
+                        setWeeklyData(daily.slice(-7));
+                    }
+
+                    if (monthly.length > 0) {
+                        monthly.sort((a, b) => a.month.localeCompare(b.month));
+                        setMonthlyData(monthly);
+                    }
+                }
+            },
+            (error) => {
+                console.warn("Analytics time-series subscription warning:", error.message);
+            }
+        );
+
+        return () => unsubscribe();
+    }, []);
+
+    // 3. Fetch product-wise sales analytics from /analytics_products
+    useEffect(() => {
+        const productsQuery = query(
+            collection(db, "analytics_products"),
+            orderBy("revenue", "desc")
+        );
+
+        const unsubscribe = onSnapshot(
+            productsQuery,
+            (snapshot) => {
+                if (!snapshot.empty) {
+                    const list = snapshot.docs.map((docSnap) => {
+                        const data = docSnap.data();
+                        return {
+                            name: data.name || docSnap.id,
+                            quantity: Number(data.quantity || 0),
+                            revenue: Number(data.revenue || 0),
+                            profit: Number(data.profit || 0),
+                        };
+                    });
+                    setProductsData(list);
+                }
+            },
+            (error) => {
+                console.warn("Analytics products query warning:", error.message);
+            }
+        );
+
+        return () => unsubscribe();
+    }, []);
 
     const visibleMonthly = useMemo(() => {
-        if (period === "3months") return ALL_MONTHLY.slice(-3);
-        if (period === "1month")  return ALL_MONTHLY.slice(-1);
-        return ALL_MONTHLY;
-    }, [period]);
+        if (period === "3months") return monthlyData.slice(-3);
+        if (period === "1month")  return monthlyData.slice(-1);
+        return monthlyData;
+    }, [period, monthlyData]);
 
-    const totals = useMemo(() => ({
-        revenue:  visibleMonthly.reduce((s, i) => s + i.revenue, 0),
-        profit:   visibleMonthly.reduce((s, i) => s + i.profit,  0),
-        orders:   visibleMonthly.reduce((s, i) => s + i.orders,  0),
-        quantity: PRODUCT_DATA.reduce((s, i) => s + i.quantity,  0),
-    }), [visibleMonthly]);
+    const totals = useMemo(() => {
+        const periodRevenue = visibleMonthly.reduce((s, i) => s + i.revenue, 0);
+        const periodProfit = visibleMonthly.reduce((s, i) => s + i.profit, 0);
+        const periodOrders = visibleMonthly.reduce((s, i) => s + i.orders, 0);
+        const totalUnits = productsData.reduce((s, i) => s + i.quantity, 0);
 
-    const totalProductRevenue = PRODUCT_DATA.reduce((s, i) => s + i.revenue, 0);
+        return {
+            revenue: periodRevenue || overviewData?.totalRevenue || 0,
+            profit: periodProfit || overviewData?.netProfit || overviewData?.totalProfit || 0,
+            orders: periodOrders || overviewData?.totalOrders || 0,
+            quantity: totalUnits || overviewData?.itemsSold || 0,
+        };
+    }, [visibleMonthly, productsData, overviewData]);
+
+    const totalProductRevenue = useMemo(() => {
+        const sum = productsData.reduce((s, i) => s + i.revenue, 0);
+        return sum > 0 ? sum : 0;
+    }, [productsData]);
 
     const exportCsv = () => {
         downloadCsv([
@@ -181,15 +262,58 @@ export default function Analytics() {
             ...visibleMonthly.map((i) => [i.time, i.revenue, i.profit, i.orders]),
             [],
             ["Product", "Quantity Sold", "Total Revenue", "Avg Price"],
-            ...PRODUCT_DATA.map((i) => [i.name, i.quantity, i.revenue, i.quantity ? (i.revenue / i.quantity).toFixed(2) : "0.00"]),
+            ...productsData.map((i) => [i.name, i.quantity, i.revenue, i.quantity ? (i.revenue / i.quantity).toFixed(2) : "0.00"]),
         ], "analytics-report.csv");
     };
 
+    const trends = overviewData?.trends || {
+        revenueGrowth: "+0.0%",
+        profitGrowth: "+0.0%",
+        orderGrowth: "+0.0%",
+        unitsGrowth: "+0.0%",
+    };
+
     const metrics = [
-        { title: "Total Revenue",  value: currency(totals.revenue),                   trend: "+12.8%", isUp: true,  detail: "vs last period", icon: FaWallet,      iconBg: "bg-indigo-50",   iconColor: "text-indigo-600"  },
-        { title: "Net Profit",     value: currency(totals.profit),                    trend: "+8.4%",  isUp: true,  detail: "vs last period", icon: FaChartLine,   iconBg: "bg-emerald-50",  iconColor: "text-emerald-600" },
-        { title: "Total Orders",   value: totals.orders.toLocaleString("en-IN"),      trend: "+6.2%",  isUp: true,  detail: "vs last period", icon: FaShoppingBag, iconBg: "bg-violet-50",   iconColor: "text-violet-600"  },
-        { title: "Units Sold",     value: totals.quantity.toLocaleString("en-IN"),    trend: "-2.1%",  isUp: false, detail: "vs last period", icon: FaBox,         iconBg: "bg-amber-50",    iconColor: "text-amber-600"   },
+        { 
+            title: "Total Revenue",  
+            value: currency(totals.revenue),                   
+            trend: trends.revenueGrowth || "+0.0%", 
+            isUp: !(trends.revenueGrowth || "").startsWith("-"),  
+            detail: "vs last period", 
+            icon: FaWallet,      
+            iconBg: "bg-indigo-50",   
+            iconColor: "text-indigo-600"  
+        },
+        { 
+            title: "Net Profit",     
+            value: currency(totals.profit),                    
+            trend: trends.profitGrowth || "+0.0%",  
+            isUp: !(trends.profitGrowth || "").startsWith("-"),  
+            detail: "vs last period", 
+            icon: FaChartLine,   
+            iconBg: "bg-emerald-50",  
+            iconColor: "text-emerald-600" 
+        },
+        { 
+            title: "Total Orders",   
+            value: Number(totals.orders).toLocaleString("en-IN"),      
+            trend: trends.orderGrowth || "+0.0%",  
+            isUp: !(trends.orderGrowth || "").startsWith("-"),  
+            detail: "vs last period", 
+            icon: FaShoppingBag, 
+            iconBg: "bg-violet-50",   
+            iconColor: "text-violet-600"  
+        },
+        { 
+            title: "Units Sold",     
+            value: Number(totals.quantity).toLocaleString("en-IN"),    
+            trend: trends.unitsGrowth || "+0.0%",  
+            isUp: !(trends.unitsGrowth || "").startsWith("-"), 
+            detail: "vs last period", 
+            icon: FaBox,         
+            iconBg: "bg-amber-50",    
+            iconColor: "text-amber-600"   
+        },
     ];
 
     return (
@@ -202,6 +326,9 @@ export default function Analytics() {
                         <h1 className="bg-gradient-to-br from-gray-900 to-secondary bg-clip-text text-3xl font-bold tracking-tight text-transparent">
                             Analytics Overview
                         </h1>
+                        <p className="mt-1 text-xs text-secondary/70">
+                            Aggregated weekly, monthly, and product revenue trends from Firestore
+                        </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
                         {/* Period selector */}
@@ -218,16 +345,6 @@ export default function Analytics() {
                                 <option value="6months">Last 6 months</option>
                             </select>
                         </label>
-                        <button
-                            type="button"
-                            onClick={handleSeedData}
-                            disabled={seeding}
-                            className="inline-flex h-10 items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 text-xs font-bold text-indigo-700 shadow-sm transition hover:bg-indigo-100 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
-                            title="Seed sample analytics collections to Firestore"
-                        >
-                            <FaDatabase size={13} className={seeding ? "animate-spin" : "text-indigo-600"} />
-                            <span>{seeding ? "Seeding DB..." : "Seed Analytics DB"}</span>
-                        </button>
                         <button
                             type="button"
                             onClick={exportCsv}
@@ -248,7 +365,7 @@ export default function Analytics() {
                     <AnalyticsChart
                         title="Weekly Performance"
                         subtitle="Daily revenue and profit for the current week"
-                        data={WEEKLY_DATA}
+                        data={weeklyData}
                         revColor="#6366f1"
                         profColor="#10b981"
                     />
@@ -266,9 +383,10 @@ export default function Analytics() {
                     <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
                         <div>
                             <h2 className="text-base font-bold text-slate-900">Product-wise Sales</h2>
+                            <p className="mt-0.5 text-xs text-slate-400">Total volume and revenue per product</p>
                         </div>
                         <span className="inline-flex w-fit rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700">
-                            {PRODUCT_DATA.length} products
+                            {productsData.length} products
                         </span>
                     </div>
 
@@ -284,42 +402,54 @@ export default function Analytics() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {PRODUCT_DATA.map((item) => {
-                                    const share = ((item.revenue / totalProductRevenue) * 100).toFixed(1);
-                                    return (
-                                        <tr key={item.name} className="border-t border-slate-100 transition-colors hover:bg-slate-50/60">
-                                            <td className="px-5 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
-                                                        <FaBox size={16} />
+                                {productsData.length > 0 ? (
+                                    productsData.map((item) => {
+                                        const share = totalProductRevenue > 0
+                                            ? ((item.revenue / totalProductRevenue) * 100).toFixed(1)
+                                            : "0.0";
+                                        return (
+                                            <tr key={item.name} className="border-t border-slate-100 transition-colors hover:bg-slate-50/60">
+                                                <td className="px-5 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                                                            <FaBox size={16} />
+                                                        </div>
+                                                        <span className="font-semibold text-slate-900">{item.name}</span>
                                                     </div>
-                                                    <span className="font-semibold text-slate-900">{item.name}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-5 py-4 text-right font-medium text-slate-600">{item.quantity.toLocaleString("en-IN")}</td>
-                                            <td className="px-5 py-4 text-right font-bold text-slate-900">{currency(item.revenue)}</td>
-                                            <td className="px-5 py-4 text-right font-medium text-slate-500">{currency(item.quantity ? item.revenue / item.quantity : 0)}</td>
-                                            <td className="px-5 py-4 text-right">
-                                                <div className="inline-flex min-w-[80px] flex-col items-end gap-1.5">
-                                                    <span className="text-xs font-bold text-indigo-600">{share}%</span>
-                                                    <span className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
-                                                        <span className="block h-full rounded-full bg-indigo-500" style={{ width: `${share}%` }} />
-                                                    </span>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
+                                                </td>
+                                                <td className="px-5 py-4 text-right font-medium text-slate-600">{Number(item.quantity).toLocaleString("en-IN")}</td>
+                                                <td className="px-5 py-4 text-right font-bold text-slate-900">{currency(item.revenue)}</td>
+                                                <td className="px-5 py-4 text-right font-medium text-slate-500">{currency(item.quantity ? item.revenue / item.quantity : 0)}</td>
+                                                <td className="px-5 py-4 text-right">
+                                                    <div className="inline-flex min-w-[80px] flex-col items-end gap-1.5">
+                                                        <span className="text-xs font-bold text-indigo-600">{share}%</span>
+                                                        <span className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
+                                                            <span className="block h-full rounded-full bg-indigo-500" style={{ width: `${Math.min(Math.max(Number(share), 0), 100)}%` }} />
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                ) : (
+                                    <tr>
+                                        <td colSpan={5} className="px-5 py-12 text-center text-xs text-slate-400">
+                                            No product sales data recorded yet
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
-                            <tfoot className="border-t-2 border-slate-200 bg-slate-50">
-                                <tr>
-                                    <td className="px-5 py-4 font-bold text-slate-900">Total</td>
-                                    <td className="px-5 py-4 text-right font-bold text-slate-900">{totals.quantity.toLocaleString("en-IN")}</td>
-                                    <td className="px-5 py-4 text-right font-bold text-slate-900">{currency(totalProductRevenue)}</td>
-                                    <td className="px-5 py-4 text-right font-semibold text-slate-400">—</td>
-                                    <td className="px-5 py-4 text-right font-bold text-slate-900">100%</td>
-                                </tr>
-                            </tfoot>
+                            {productsData.length > 0 && (
+                                <tfoot className="border-t-2 border-slate-200 bg-slate-50">
+                                    <tr>
+                                        <td className="px-5 py-4 font-bold text-slate-900">Total</td>
+                                        <td className="px-5 py-4 text-right font-bold text-slate-900">{Number(totals.quantity).toLocaleString("en-IN")}</td>
+                                        <td className="px-5 py-4 text-right font-bold text-slate-900">{currency(totalProductRevenue)}</td>
+                                        <td className="px-5 py-4 text-right font-semibold text-slate-400">—</td>
+                                        <td className="px-5 py-4 text-right font-bold text-slate-900">100%</td>
+                                    </tr>
+                                </tfoot>
+                            )}
                         </table>
                     </div>
                 </section>
