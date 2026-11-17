@@ -144,6 +144,9 @@ function StatusBadge({ status }) {
         Delivered: "bg-emerald-50 text-emerald-700 ring-emerald-600/10",
         Completed: "bg-emerald-50 text-emerald-700 ring-emerald-600/10",
         Processing: "bg-amber-50 text-amber-700 ring-amber-600/10",
+        Dispatch: "bg-indigo-50 text-indigo-700 ring-indigo-600/10",
+        "Out of Delivery": "bg-blue-50 text-blue-700 ring-blue-600/10",
+        New: "bg-sky-50 text-sky-700 ring-sky-600/10",
         Cancelled: "bg-rose-50 text-rose-700 ring-rose-600/10",
     };
 
@@ -151,12 +154,15 @@ function StatusBadge({ status }) {
         Delivered: "bg-emerald-500",
         Completed: "bg-emerald-500",
         Processing: "bg-amber-500",
+        Dispatch: "bg-indigo-500",
+        "Out of Delivery": "bg-blue-500",
+        New: "bg-sky-500",
         Cancelled: "bg-rose-500",
     };
 
     return (
         <span
-            className={`inline-flex items-center gap-2 whitespace-nowrap rounded-full px-3 py-1.5 text-[11px] font-bold ring-1 ring-inset ${
+            className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ring-inset ${
                 statusClasses[status] || "bg-slate-100 text-slate-600 ring-slate-200"
             }`}
         >
@@ -166,6 +172,20 @@ function StatusBadge({ status }) {
                 }`}
             />
             {status}
+        </span>
+    );
+}
+
+function PaymentBadge({ status }) {
+    const isPaid = String(status || "").toLowerCase() === "paid";
+    return (
+        <span
+            className={`inline-flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                isPaid ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+            }`}
+        >
+            <span className={`h-1 w-1 rounded-full ${isPaid ? "bg-emerald-500" : "bg-amber-500"}`} />
+            {isPaid ? "Paid" : (status || "Pending")}
         </span>
     );
 }
@@ -210,26 +230,47 @@ export default function Report() {
                 if (!snapshot.empty) {
                     const list = snapshot.docs.map((docSnap) => {
                         const data = docSnap.data();
-                        let orderDate = data.orderDate;
-                        if (!orderDate && data.createdAt?.toDate) {
-                            orderDate = toInputDate(data.createdAt.toDate());
+
+                        // Safely normalize date to "YYYY-MM-DD"
+                        let rawDate = data.orderDate;
+                        if (!rawDate && data.createdAt?.toDate) {
+                            rawDate = toInputDate(data.createdAt.toDate());
+                        }
+                        let cleanDate = toInputDate(new Date());
+                        if (typeof rawDate === "string") {
+                            cleanDate = rawDate.slice(0, 10);
+                        } else if (rawDate && typeof rawDate.toDate === "function") {
+                            cleanDate = toInputDate(rawDate.toDate());
+                        } else if (rawDate) {
+                            cleanDate = toInputDate(new Date(rawDate));
                         }
 
                         const items = Array.isArray(data.items) ? data.items : [];
-                        const totalUnits = items.reduce((sum, i) => sum + Number(i.quantity || 1), 0) || Number(data.totalItems || 1);
-                        const revenue = Number(data.totalAmount || data.total || 0);
-                        const grossSubtotal = Number(data.grossSubtotal || data.subtotal || revenue);
-                        const tax = Number(data.taxCollected || data.tax || 0);
-                        const delivery = Number(data.deliveryCharge || data.deliveryCharges || data.shipping || 0);
-                        const discount = Number(data.discount || 0);
-                        const cogs = Number(data.costOfGoods || 0);
+                        const totalUnits = Number(
+                            data.totalItems ??
+                            items.reduce((sum, i) => sum + Number(i.quantity || 0), 0)
+                        );
+                        const revenue = Number(data.totalAmount ?? data.total ?? 0);
+                        const grossSubtotal = Number(data.grossSubtotal ?? data.subtotal ?? revenue);
+                        const tax = Number(data.taxCollected ?? data.tax ?? 0);
+                        const delivery = Number(data.deliveryCharge ?? data.deliveryCharges ?? data.shipping ?? 0);
+                        const discount = Number(data.discount ?? 0);
+                        const cogs = Number(data.costOfGoods ?? 0);
                         const profit = Number(data.netProfit ?? (revenue - cogs));
+                        const isPaid = String(data.paymentStatus || "").toLowerCase() === "paid";
+                        const paidAmount = Number(data.paidAmount ?? (isPaid ? revenue : 0));
+                        const unpaidAmount = Math.max(0, revenue - paidAmount);
 
                         return {
                             id: data.orderId || docSnap.id,
-                            date: orderDate || toInputDate(new Date()),
+                            orderDocId: data.orderDocId || docSnap.id,
+                            date: cleanDate,
                             customer: data.customerName || data.customer || "Customer",
+                            customerPhone: data.customerPhone || data.phone || "",
+                            customerEmail: data.customerEmail || data.email || "",
+                            deliveryType: data.deliveryType || "normal",
                             items: totalUnits,
+                            itemList: items,
                             amount: revenue,
                             grossSubtotal,
                             taxCollected: tax,
@@ -238,6 +279,10 @@ export default function Report() {
                             costOfGoods: cogs,
                             netProfit: profit,
                             status: data.status || "Delivered",
+                            paymentMethod: data.paymentMethod || "Cash on Delivery",
+                            paymentStatus: data.paymentStatus || (data.status === "Delivered" ? "Paid" : "Pending"),
+                            paidAmount,
+                            unpaidAmount,
                         };
                     });
 
@@ -277,6 +322,8 @@ export default function Report() {
             const deliveryCharges = filteredOrders.reduce((sum, o) => sum + o.deliveryCharges, 0);
             const discounts = filteredOrders.reduce((sum, o) => sum + o.discounts, 0);
             const costOfGoods = filteredOrders.reduce((sum, o) => sum + o.costOfGoods, 0);
+            const totalPaid = filteredOrders.reduce((sum, o) => sum + o.paidAmount, 0);
+            const totalReceivables = filteredOrders.reduce((sum, o) => sum + o.unpaidAmount, 0);
 
             return {
                 totalRevenue,
@@ -288,6 +335,8 @@ export default function Report() {
                 deliveryCharges,
                 discounts,
                 costOfGoods,
+                totalPaid,
+                totalReceivables,
                 filteredOrders,
             };
         }
@@ -303,6 +352,8 @@ export default function Report() {
             deliveryCharges: 0,
             discounts: 0,
             costOfGoods: 0,
+            totalPaid: 0,
+            totalReceivables: 0,
             filteredOrders: [],
         };
     }, [generatedRange, liveOrders]);
@@ -346,9 +397,22 @@ export default function Report() {
         });
     };
 
+    const hasLiveOrders = liveOrders.length > 0;
+    const activeRevenue = hasLiveOrders ? report.totalRevenue : (overviewData?.totalRevenue || 0);
+    const activeProfit = hasLiveOrders ? report.netProfit : (overviewData?.netProfit ?? overviewData?.totalProfit ?? 0);
+    const activeOrders = hasLiveOrders ? report.totalOrders : (overviewData?.totalOrders || 0);
+    const activeItems = hasLiveOrders ? report.itemsSold : (overviewData?.itemsSold || 0);
+    const activeGross = hasLiveOrders ? report.grossSubtotal : (overviewData?.grossSubtotal || activeRevenue);
+    const activeTax = hasLiveOrders ? report.taxCollected : (overviewData?.taxCollected || 0);
+    const activeDelivery = hasLiveOrders ? report.deliveryCharges : (overviewData?.deliveryCharges || 0);
+    const activeDiscounts = hasLiveOrders ? report.discounts : (overviewData?.discounts || 0);
+    const activeCogs = hasLiveOrders ? report.costOfGoods : (overviewData?.costOfGoods || 0);
+    const activePaid = hasLiveOrders ? report.totalPaid : (overviewData?.totalPaid || activeRevenue);
+    const activeReceivables = hasLiveOrders ? report.totalReceivables : (overviewData?.totalReceivables || 0);
+
     const exportCsv = () => {
         const rows = [
-            ["Financial Report"],
+            ["Malayali Bazaar - Financial Report"],
             [
                 "Period",
                 dateLabel(generatedRange.from),
@@ -356,58 +420,83 @@ export default function Report() {
                 dateLabel(generatedRange.to),
             ],
             [],
-            ["Metric", "Value"],
-            ["Total Sales Revenue", report.totalRevenue],
-            ["Net Profit", report.netProfit],
-            ["Total Orders", report.totalOrders],
-            ["Items Sold", report.itemsSold],
-            ["Gross Subtotal", report.grossSubtotal],
-            ["Tax Collected", report.taxCollected],
-            ["Delivery Charges", report.deliveryCharges],
-            ["Discounts", report.discounts],
-            ["Cost of Goods Sold", report.costOfGoods],
+            ["Financial Metric", "Value (₹)"],
+            ["Total Sales Revenue", activeRevenue],
+            ["Net Profit", activeProfit],
+            ["Total Orders Processed", activeOrders],
+            ["Total Items Sold", activeItems],
+            ["Gross Subtotal", activeGross],
+            ["Tax Collected", activeTax],
+            ["Delivery Charges", activeDelivery],
+            ["Discounts Applied", activeDiscounts],
+            ["Cost of Goods Sold (COGS)", activeCogs],
+            ["Total Paid Collected", activePaid],
+            ["Total Outstanding Receivables", activeReceivables],
             [],
-            ["Order ID", "Date", "Customer", "Items", "Amount", "Status"],
+            [
+                "Order ID",
+                "Date",
+                "Customer",
+                "Delivery Type",
+                "Payment Method",
+                "Payment Status",
+                "Items Count",
+                "Gross Subtotal",
+                "Tax",
+                "Delivery Fee",
+                "Total Amount",
+                "COGS",
+                "Net Profit",
+                "Status",
+            ],
             ...report.filteredOrders.map((order) => [
                 order.id,
                 order.date,
                 order.customer,
+                order.deliveryType,
+                order.paymentMethod,
+                order.paymentStatus,
                 order.items,
+                order.grossSubtotal,
+                order.taxCollected,
+                order.deliveryCharges,
                 order.amount,
+                order.costOfGoods,
+                order.netProfit,
                 order.status,
             ]),
         ];
 
-        downloadCsv(rows);
+        downloadCsv(rows, `financial-report-${generatedRange.from}-to-${generatedRange.to}.csv`);
     };
 
     const kpis = [
         {
             title: "Total Sales Revenue",
-            value: currency(report.totalRevenue || overviewData?.totalRevenue || 0),
+            value: currency(activeRevenue),
             caption: "Revenue for selected period",
             icon: FaWallet,
             iconClass: "bg-primary/15 text-gray-900",
         },
         {
             title: "Net Profit",
-            value: currency(report.netProfit || overviewData?.netProfit || overviewData?.totalProfit || 0),
+            value: currency(activeProfit),
             caption: "After product costs",
             icon: FaChartLine,
             iconClass: "bg-emerald-50 text-emerald-700",
         },
         {
             title: "Total Orders",
-            value: Number(report.totalOrders || overviewData?.totalOrders || 0).toLocaleString("en-IN"),
-            caption: `${Number(report.itemsSold || overviewData?.itemsSold || 0).toLocaleString("en-IN")} items sold`,
+            value: Number(activeOrders).toLocaleString("en-IN"),
+            caption: `${Number(activeItems).toLocaleString("en-IN")} items sold`,
             icon: FaShoppingBag,
             iconClass: "bg-tertiary/30 text-secondary",
         },
         {
             title: "Average Order Value",
             value: currency(
-                report.totalOrders
-                    ? report.totalRevenue / report.totalOrders
+                activeOrders
+                    ? activeRevenue / activeOrders
                     : 0
             ),
             caption: "Revenue per order",
@@ -416,8 +505,8 @@ export default function Report() {
         },
     ];
 
-    const profitMargin = report.totalRevenue
-        ? (report.netProfit / report.totalRevenue) * 100
+    const profitMargin = activeRevenue
+        ? (activeProfit / activeRevenue) * 100
         : 0;
 
     return (
@@ -549,7 +638,7 @@ export default function Report() {
                                     </div>
 
                                     <p className="mt-3 text-2xl font-bold text-gray-900">
-                                        {Number(report.totalOrders).toLocaleString("en-IN")}
+                                        {Number(activeOrders).toLocaleString("en-IN")}
                                     </p>
 
                                     <p className="mt-1 text-[11px] text-secondary/60">
@@ -566,7 +655,7 @@ export default function Report() {
                                     </div>
 
                                     <p className="mt-3 text-2xl font-bold text-gray-900">
-                                        {Number(report.itemsSold).toLocaleString("en-IN")}
+                                        {Number(activeItems).toLocaleString("en-IN")}
                                     </p>
 
                                     <p className="mt-1 text-[11px] text-secondary/60">
@@ -584,8 +673,8 @@ export default function Report() {
 
                                     <p className="mt-3 break-words text-2xl font-bold text-gray-900">
                                         {currency(
-                                            report.totalOrders
-                                                ? report.totalRevenue / report.totalOrders
+                                            activeOrders
+                                                ? activeRevenue / activeOrders
                                                 : 0
                                         )}
                                     </p>
@@ -608,23 +697,35 @@ export default function Report() {
 
                                 <SummaryRow
                                     label="Gross subtotal"
-                                    value={currency(report.grossSubtotal)}
+                                    value={currency(activeGross)}
                                 />
 
                                 <SummaryRow
                                     label="Tax collected"
-                                    value={`+${currency(report.taxCollected)}`}
+                                    value={`+${currency(activeTax)}`}
                                 />
 
                                 <SummaryRow
                                     label="Delivery charges"
-                                    value={`+${currency(report.deliveryCharges)}`}
+                                    value={`+${currency(activeDelivery)}`}
                                 />
 
                                 <SummaryRow
                                     label="Discounts applied"
-                                    value={`−${currency(report.discounts)}`}
+                                    value={`−${currency(activeDiscounts)}`}
                                     valueClass="text-rose-600"
+                                />
+
+                                <SummaryRow
+                                    label="Paid amount collected"
+                                    value={currency(activePaid)}
+                                    valueClass="text-emerald-700"
+                                />
+
+                                <SummaryRow
+                                    label="Outstanding receivables"
+                                    value={currency(activeReceivables)}
+                                    valueClass={activeReceivables > 0 ? "text-amber-700" : "text-gray-500"}
                                 />
 
                                 <div className="mt-4 rounded-xl bg-primary/15 p-4">
@@ -640,7 +741,7 @@ export default function Report() {
                                         </div>
 
                                         <p className="break-words text-right text-lg font-bold text-gray-900 sm:text-xl">
-                                            {currency(report.totalRevenue)}
+                                            {currency(activeRevenue)}
                                         </p>
                                     </div>
                                 </div>
@@ -661,7 +762,7 @@ export default function Report() {
                                             </p>
 
                                             <p className="mt-2 break-words text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
-                                                {currency(report.netProfit)}
+                                                {currency(activeProfit)}
                                             </p>
                                         </div>
 
@@ -696,18 +797,18 @@ export default function Report() {
                                 <div className="mt-4">
                                     <SummaryRow
                                         label="Total sales revenue"
-                                        value={currency(report.totalRevenue)}
+                                        value={currency(activeRevenue)}
                                     />
 
                                     <SummaryRow
                                         label="Cost of goods sold"
-                                        value={currency(report.costOfGoods)}
+                                        value={currency(activeCogs)}
                                         valueClass="text-rose-600"
                                     />
 
                                     <SummaryRow
                                         label="Net profit"
-                                        value={currency(report.netProfit)}
+                                        value={currency(activeProfit)}
                                         valueClass="text-emerald-700"
                                     />
                                 </div>
@@ -756,6 +857,7 @@ export default function Report() {
                                                 <th className="px-4 py-4">Customer</th>
                                                 <th className="px-4 py-4 text-center">Items</th>
                                                 <th className="px-4 py-4 text-right">Amount</th>
+                                                <th className="px-4 py-4 text-center">Payment</th>
                                                 <th className="px-5 py-4">Status</th>
                                             </tr>
                                         </thead>
@@ -778,8 +880,8 @@ export default function Report() {
                                                                         {order.id}
                                                                     </p>
 
-                                                                    <p className="mt-0.5 text-[10px] text-secondary/60">
-                                                                        Order transaction
+                                                                    <p className="mt-0.5 text-[10px] font-semibold uppercase text-secondary/60">
+                                                                        {order.deliveryType || "Order"}
                                                                     </p>
                                                                 </div>
                                                             </div>
@@ -789,16 +891,34 @@ export default function Report() {
                                                             {dateLabel(order.date)}
                                                         </td>
 
-                                                        <td className="px-4 py-4 font-semibold text-gray-800">
-                                                            {order.customer}
+                                                        <td className="px-4 py-4">
+                                                            <p className="font-semibold text-gray-800">
+                                                                {order.customer}
+                                                            </p>
+                                                            {order.customerPhone && (
+                                                                <p className="text-[10px] text-secondary/60">
+                                                                    {order.customerPhone}
+                                                                </p>
+                                                            )}
                                                         </td>
 
                                                         <td className="px-4 py-4 text-center text-xs font-semibold text-secondary">
                                                             {order.items}
                                                         </td>
 
-                                                        <td className="whitespace-nowrap px-4 py-4 text-right font-bold text-gray-900">
-                                                            {currency(order.amount)}
+                                                        <td className="whitespace-nowrap px-4 py-4 text-right">
+                                                            <p className="font-bold text-gray-900">
+                                                                {currency(order.amount)}
+                                                            </p>
+                                                            {order.costOfGoods > 0 && (
+                                                                <p className="text-[10px] font-medium text-emerald-600">
+                                                                    Profit: {currency(order.netProfit)}
+                                                                </p>
+                                                            )}
+                                                        </td>
+
+                                                        <td className="whitespace-nowrap px-4 py-4 text-center">
+                                                            <PaymentBadge status={order.paymentStatus} />
                                                         </td>
 
                                                         <td className="px-5 py-4">
@@ -808,7 +928,7 @@ export default function Report() {
                                                 ))
                                             ) : (
                                                 <tr>
-                                                    <td colSpan={6} className="px-5 py-14 text-center">
+                                                    <td colSpan={7} className="px-5 py-14 text-center">
                                                         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-secondary/60">
                                                             <FaReceipt size={20} />
                                                         </div>

@@ -34,6 +34,9 @@ import {
 import {
   manageDeliveryPlace,
 } from "./src/Delivery/deliveryPlace.callable.js";
+import {
+  placeOrder,
+} from "./src/Order/order.callable.js";
 setGlobalOptions({maxInstances: 10});
 
 export {manageAdmin,
@@ -56,4 +59,5 @@ export {manageAdmin,
   syncNotificationTopics,
   recordCustomerPayment,
   manageDeliveryPlace,
+  placeOrder,
 };

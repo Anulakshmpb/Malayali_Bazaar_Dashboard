@@ -16,7 +16,11 @@ import {
     FaCalendarAlt,
     FaChartLine,
     FaDownload,
+    FaHandHoldingUsd,
+    FaMoneyBillWave,
+    FaReceipt,
     FaShoppingBag,
+    FaTruck,
     FaWallet,
 } from "react-icons/fa";
 import { 
@@ -212,13 +216,20 @@ export default function Analytics() {
                     const list = snapshot.docs.map((docSnap) => {
                         const data = docSnap.data();
                         return {
-                            name: data.name || docSnap.id,
+                            id: docSnap.id,
+                            name: data.productName || data.name || docSnap.id,
+                            sku: data.sku || "",
+                            unit: data.unit || "",
+                            image: data.image || data.thumbnail || "",
                             quantity: Number(data.quantity || 0),
                             revenue: Number(data.revenue || 0),
+                            costOfGoods: Number(data.costOfGoods || 0),
                             profit: Number(data.profit || 0),
                         };
                     });
                     setProductsData(list);
+                } else {
+                    setProductsData([]);
                 }
             },
             (error) => {
@@ -240,12 +251,20 @@ export default function Analytics() {
         const periodProfit = visibleMonthly.reduce((s, i) => s + i.profit, 0);
         const periodOrders = visibleMonthly.reduce((s, i) => s + i.orders, 0);
         const totalUnits = productsData.reduce((s, i) => s + i.quantity, 0);
+        const totalCogs = productsData.reduce((s, i) => s + (i.costOfGoods || 0), 0);
 
         return {
             revenue: periodRevenue || overviewData?.totalRevenue || 0,
             profit: periodProfit || overviewData?.netProfit || overviewData?.totalProfit || 0,
             orders: periodOrders || overviewData?.totalOrders || 0,
             quantity: totalUnits || overviewData?.itemsSold || 0,
+            grossSubtotal: overviewData?.grossSubtotal || (periodRevenue || overviewData?.totalRevenue || 0),
+            taxCollected: overviewData?.taxCollected || 0,
+            deliveryCharges: overviewData?.deliveryCharges || 0,
+            discounts: overviewData?.discounts || 0,
+            costOfGoods: totalCogs || overviewData?.costOfGoods || 0,
+            totalPaid: overviewData?.totalPaid || (periodRevenue || overviewData?.totalRevenue || 0),
+            totalReceivables: overviewData?.totalReceivables || 0,
         };
     }, [visibleMonthly, productsData, overviewData]);
 
@@ -256,14 +275,41 @@ export default function Analytics() {
 
     const exportCsv = () => {
         downloadCsv([
-            ["Analytics Report", period],
+            ["Malayali Bazaar - Analytics & Financial Report", period],
             [],
-            ["Month", "Revenue", "Profit", "Orders"],
+            ["Executive Financial Summary", "Value (₹)"],
+            ["Total Sales Revenue", totals.revenue],
+            ["Gross Subtotal", totals.grossSubtotal],
+            ["Cost of Goods Sold (COGS)", totals.costOfGoods],
+            ["Net Profit", totals.profit],
+            ["Tax Collected", totals.taxCollected],
+            ["Delivery Charges Collected", totals.deliveryCharges],
+            ["Discounts Applied", totals.discounts],
+            ["Total Paid Amount", totals.totalPaid],
+            ["Outstanding Receivables", totals.totalReceivables],
+            ["Total Orders Processed", totals.orders],
+            ["Total Units Sold", totals.quantity],
+            [],
+            ["Monthly Performance", "Revenue", "Profit", "Orders"],
             ...visibleMonthly.map((i) => [i.time, i.revenue, i.profit, i.orders]),
             [],
-            ["Product", "Quantity Sold", "Total Revenue", "Avg Price"],
-            ...productsData.map((i) => [i.name, i.quantity, i.revenue, i.quantity ? (i.revenue / i.quantity).toFixed(2) : "0.00"]),
-        ], "analytics-report.csv");
+            ["Product Name", "SKU", "Unit", "Qty Sold", "Total Revenue", "Cost of Goods", "Net Profit", "Margin %", "Avg Price"],
+            ...productsData.map((i) => {
+                const margin = i.revenue > 0 ? ((i.profit / i.revenue) * 100).toFixed(1) : "0.0";
+                const avgPrice = i.quantity ? (i.revenue / i.quantity).toFixed(2) : "0.00";
+                return [
+                    i.name,
+                    i.sku,
+                    i.unit,
+                    i.quantity,
+                    i.revenue,
+                    i.costOfGoods,
+                    i.profit,
+                    `${margin}%`,
+                    avgPrice,
+                ];
+            }),
+        ], `analytics-report-${period}.csv`);
     };
 
     const trends = overviewData?.trends || {
@@ -316,6 +362,57 @@ export default function Analytics() {
         },
     ];
 
+    const financialCards = [
+        {
+            title: "Gross Subtotal",
+            value: currency(totals.grossSubtotal),
+            description: "Product merchandise volume",
+            icon: FaReceipt,
+            color: "text-slate-700",
+            bg: "bg-slate-100",
+        },
+        {
+            title: "Cost of Goods (COGS)",
+            value: currency(totals.costOfGoods),
+            description: "Total inventory wholesale costs",
+            icon: FaMoneyBillWave,
+            color: "text-rose-600",
+            bg: "bg-rose-50",
+        },
+        {
+            title: "Tax Collected",
+            value: currency(totals.taxCollected),
+            description: "Standard GST collected",
+            icon: FaReceipt,
+            color: "text-indigo-600",
+            bg: "bg-indigo-50",
+        },
+        {
+            title: "Delivery Charges",
+            value: currency(totals.deliveryCharges),
+            description: "Shipping fees collected",
+            icon: FaTruck,
+            color: "text-sky-600",
+            bg: "bg-sky-50",
+        },
+        {
+            title: "Paid Amount Collected",
+            value: currency(totals.totalPaid),
+            description: "Settled payments received",
+            icon: FaWallet,
+            color: "text-emerald-600",
+            bg: "bg-emerald-50",
+        },
+        {
+            title: "Outstanding Receivables",
+            value: currency(totals.totalReceivables),
+            description: "Credit / COD pending balance",
+            icon: FaHandHoldingUsd,
+            color: totals.totalReceivables > 0 ? "text-amber-600" : "text-slate-500",
+            bg: totals.totalReceivables > 0 ? "bg-amber-50" : "bg-slate-100",
+        },
+    ];
+
     return (
         <main className="page-container min-h-screen bg-slate-50/40 pb-12">
             <div className="mx-auto max-w-7xl space-y-7">
@@ -327,7 +424,7 @@ export default function Analytics() {
                             Analytics Overview
                         </h1>
                         <p className="mt-1 text-xs text-secondary/70">
-                            Aggregated weekly, monthly, and product revenue trends from Firestore
+                            Aggregated weekly, monthly, product revenue, and financial metrics from orders
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
@@ -355,7 +452,7 @@ export default function Analytics() {
                     </div>
                 </div>
 
-                {/* ── KPI cards ── */}
+                {/* ── Primary KPI cards ── */}
                 <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     {metrics.map((m) => <MetricCard key={m.title} {...m} />)}
                 </section>
@@ -378,12 +475,49 @@ export default function Analytics() {
                     />
                 </section>
 
-                {/* ── Product table ── */}
+                {/* ── Financial & Operations Breakdown ── */}
+                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                    <div className="mb-5">
+                        <h2 className="text-base font-bold text-slate-900">Financial & Ledger Breakdown</h2>
+                        <p className="mt-0.5 text-xs text-slate-400">
+                            Subtotals, taxes, logistics, and receivables derived from processed orders
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {financialCards.map((card) => {
+                            const CardIcon = card.icon;
+                            return (
+                                <div
+                                    key={card.title}
+                                    className="flex items-start gap-4 rounded-xl border border-slate-100 bg-slate-50/60 p-4 transition hover:bg-white hover:shadow-sm"
+                                >
+                                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${card.bg}`}>
+                                        <CardIcon size={18} className={card.color} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                            {card.title}
+                                        </p>
+                                        <p className="mt-1 text-xl font-extrabold text-slate-900">
+                                            {card.value}
+                                        </p>
+                                        <p className="mt-0.5 text-[11px] text-slate-400">
+                                            {card.description}
+                                        </p>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </section>
+
+                {/* ── Product-wise Sales Table ── */}
                 <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
                         <div>
-                            <h2 className="text-base font-bold text-slate-900">Product-wise Sales</h2>
-                            <p className="mt-0.5 text-xs text-slate-400">Total volume and revenue per product</p>
+                            <h2 className="text-base font-bold text-slate-900">Product-wise Sales & Profitability</h2>
+                            <p className="mt-0.5 text-xs text-slate-400">Detailed volume, cost of goods, and net margin per product</p>
                         </div>
                         <span className="inline-flex w-fit rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700">
                             {productsData.length} products
@@ -391,14 +525,16 @@ export default function Analytics() {
                     </div>
 
                     <div className="overflow-x-auto">
-                        <table className="w-full min-w-[650px] text-left text-sm">
+                        <table className="w-full min-w-[760px] text-left text-sm">
                             <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                                 <tr>
                                     <th className="px-5 py-4">Product</th>
-                                    <th className="px-5 py-4 text-right">Qty Sold</th>
-                                    <th className="px-5 py-4 text-right">Revenue</th>
-                                    <th className="px-5 py-4 text-right">Avg Price</th>
-                                    <th className="px-5 py-4 text-right">Share</th>
+                                    <th className="px-4 py-4 text-right">Qty Sold</th>
+                                    <th className="px-4 py-4 text-right">Revenue</th>
+                                    <th className="px-4 py-4 text-right">COGS</th>
+                                    <th className="px-4 py-4 text-right">Net Profit</th>
+                                    <th className="px-4 py-4 text-right">Avg Price</th>
+                                    <th className="px-5 py-4 text-right">Revenue Share</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -407,19 +543,57 @@ export default function Analytics() {
                                         const share = totalProductRevenue > 0
                                             ? ((item.revenue / totalProductRevenue) * 100).toFixed(1)
                                             : "0.0";
+                                        const margin = item.revenue > 0
+                                            ? ((item.profit / item.revenue) * 100).toFixed(1)
+                                            : "0.0";
                                         return (
-                                            <tr key={item.name} className="border-t border-slate-100 transition-colors hover:bg-slate-50/60">
+                                            <tr key={item.id || item.name} className="border-t border-slate-100 transition-colors hover:bg-slate-50/60">
                                                 <td className="px-5 py-4">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
-                                                            <FaBox size={16} />
+                                                        {item.image ? (
+                                                            <img
+                                                                src={item.image}
+                                                                alt={item.name}
+                                                                className="h-10 w-10 shrink-0 rounded-lg object-cover border border-slate-200"
+                                                                onError={(e) => {
+                                                                    e.currentTarget.style.display = "none";
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                                                                <FaBox size={16} />
+                                                            </div>
+                                                        )}
+                                                        <div>
+                                                            <span className="font-semibold text-slate-900 block">{item.name}</span>
+                                                            {(item.sku || item.unit) && (
+                                                                <span className="text-[10px] text-slate-400">
+                                                                    {[item.sku ? `SKU: ${item.sku}` : null, item.unit].filter(Boolean).join(" • ")}
+                                                                </span>
+                                                            )}
                                                         </div>
-                                                        <span className="font-semibold text-slate-900">{item.name}</span>
                                                     </div>
                                                 </td>
-                                                <td className="px-5 py-4 text-right font-medium text-slate-600">{Number(item.quantity).toLocaleString("en-IN")}</td>
-                                                <td className="px-5 py-4 text-right font-bold text-slate-900">{currency(item.revenue)}</td>
-                                                <td className="px-5 py-4 text-right font-medium text-slate-500">{currency(item.quantity ? item.revenue / item.quantity : 0)}</td>
+                                                <td className="px-4 py-4 text-right font-medium text-slate-600">
+                                                    {Number(item.quantity).toLocaleString("en-IN")}
+                                                </td>
+                                                <td className="px-4 py-4 text-right font-bold text-slate-900">
+                                                    {currency(item.revenue)}
+                                                </td>
+                                                <td className="px-4 py-4 text-right font-medium text-rose-600">
+                                                    {currency(item.costOfGoods)}
+                                                </td>
+                                                <td className="px-4 py-4 text-right">
+                                                    <span className="font-bold text-emerald-600 block">
+                                                        {currency(item.profit)}
+                                                    </span>
+                                                    <span className="text-[10px] text-slate-400">
+                                                        {margin}% margin
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-4 text-right font-medium text-slate-500">
+                                                    {currency(item.quantity ? item.revenue / item.quantity : 0)}
+                                                </td>
                                                 <td className="px-5 py-4 text-right">
                                                     <div className="inline-flex min-w-[80px] flex-col items-end gap-1.5">
                                                         <span className="text-xs font-bold text-indigo-600">{share}%</span>
@@ -433,7 +607,7 @@ export default function Analytics() {
                                     })
                                 ) : (
                                     <tr>
-                                        <td colSpan={5} className="px-5 py-12 text-center text-xs text-slate-400">
+                                        <td colSpan={7} className="px-5 py-12 text-center text-xs text-slate-400">
                                             No product sales data recorded yet
                                         </td>
                                     </tr>
@@ -443,9 +617,11 @@ export default function Analytics() {
                                 <tfoot className="border-t-2 border-slate-200 bg-slate-50">
                                     <tr>
                                         <td className="px-5 py-4 font-bold text-slate-900">Total</td>
-                                        <td className="px-5 py-4 text-right font-bold text-slate-900">{Number(totals.quantity).toLocaleString("en-IN")}</td>
-                                        <td className="px-5 py-4 text-right font-bold text-slate-900">{currency(totalProductRevenue)}</td>
-                                        <td className="px-5 py-4 text-right font-semibold text-slate-400">—</td>
+                                        <td className="px-4 py-4 text-right font-bold text-slate-900">{Number(totals.quantity).toLocaleString("en-IN")}</td>
+                                        <td className="px-4 py-4 text-right font-bold text-slate-900">{currency(totalProductRevenue)}</td>
+                                        <td className="px-4 py-4 text-right font-bold text-rose-600">{currency(totals.costOfGoods)}</td>
+                                        <td className="px-4 py-4 text-right font-bold text-emerald-600">{currency(totals.profit)}</td>
+                                        <td className="px-4 py-4 text-right font-semibold text-slate-400">—</td>
                                         <td className="px-5 py-4 text-right font-bold text-slate-900">100%</td>
                                     </tr>
                                 </tfoot>
