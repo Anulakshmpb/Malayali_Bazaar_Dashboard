@@ -1,4 +1,3 @@
-
 /* eslint-disable max-len */
 import Joi from "joi";
 
@@ -17,6 +16,7 @@ const productFields = {
   subCategoryId: Joi.string().required(),
   brand: Joi.string().required(),
   brandId: Joi.string().required(),
+  productCategory: Joi.string().required(),
   schemes: Joi.array()
       .items(schemeItemSchema)
       .unique("schemeId"),
@@ -26,7 +26,7 @@ const productFields = {
   relatedProduct: Joi.array().items(
       Joi.object({
         productId: Joi.string().required(),
-        productName: Joi.string().required(),
+        // productName: Joi.string().required(),
       }),
   ),
   details: Joi.object().unknown(true).allow(null),
@@ -45,6 +45,7 @@ const productFields = {
   distributorPrice: Joi.number().min(0).allow("", null),
   thumbnail: Joi.string().allow("", null),
   images: Joi.array().items(Joi.string()),
+  sourceProductId: Joi.string().trim().allow("", null),
 };
 const validateSchemeIds = (value, helpers) => {
   const {schemes, schemeIds} = value;

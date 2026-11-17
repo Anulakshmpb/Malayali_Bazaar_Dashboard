@@ -10,7 +10,8 @@ import {
     Edit,
     Trash2,
     X,
-    Check
+    Check,
+    CopyPlus
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -49,8 +50,8 @@ export default function Products() {
             collection(db, 'products'),
             (snapshot) => {
                 setProducts(snapshot.docs.map(document => ({
-                    id: document.id,
                     ...document.data(),
+                    id: document.id,
                 })));
                 setLoading(false);
             },
@@ -207,6 +208,28 @@ export default function Products() {
         }
     };
 
+    const handleAddSimilarProduct = (product) => {
+        const sourceProductId = product.id;
+
+        if (!sourceProductId) {
+            showToast(
+                'Unable to identify the source product. Please refresh the page.',
+                'error'
+            );
+            return;
+        }
+
+        navigate('/products/add', {
+            state: {
+                isSimilarProduct: true,
+                sourceProductId,
+                similarProduct: {
+                    ...product,
+                    id: sourceProductId,
+                },
+            },
+        });
+    };
     return (
         <div className="min-h-screen bg-white pb-12 page-container">
             <div className="max-w-7xl mx-auto space-y-6">
@@ -308,7 +331,7 @@ export default function Products() {
 
                                     <div className="mt-1 flex items-baseline justify-between">
                                         <span className="text-sm font-extrabold text-gray-900">₹{Number(product.offerPrice || product.mrp || 0).toFixed(2)}</span>
-                                        <span className="text-[11px] font-medium text-gray-500">{product.unit}</span>
+                                        <span className="text-[11px] font-medium text-gray-500">{product.quantity}{product.unit}</span>
                                     </div>
                                 </div>
 
@@ -333,6 +356,15 @@ export default function Products() {
 
                                     {/* Actions */}
                                     <div className="flex items-center gap-1">
+                                        {/* Add Related Product */}
+                                        <button
+                                            type="button"
+                                            onClick={() => handleAddSimilarProduct(product)}
+                                            className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-md border border-indigo-200 transition-colors"
+                                            title="Add Similar Product"
+                                        >
+                                            <CopyPlus size={14} />
+                                        </button>
                                         <button
                                             type="button"
                                             onClick={() => navigate(`/products/add?edit=${encodeURIComponent(product.id)}`)}
