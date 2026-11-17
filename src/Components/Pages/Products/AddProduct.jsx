@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { collection, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
@@ -32,6 +32,9 @@ export default function AddProduct() {
     const [stockInfo, setStockInfo] = useState({ quantity: '', unit: 'g', stock: '' });
     const [pricing, setPricing] = useState({ mrp: '', distributorPrice: '', offerPrice: '' });
     const [taxApplicable, setTaxApplicable] = useState(false);
+    const [taxPercentage, setTaxPercentage] = useState('');
+    const [isActive, setIsActive] = useState(true);
+    const [productVisible, setProductVisible] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [relatedProducts, setRelatedProducts] = useState([]);
     const [productOptions, setProductOptions] = useState([]);
@@ -40,9 +43,11 @@ export default function AddProduct() {
     const [relatedProductDropdownOpen, setRelatedProductDropdownOpen] = useState(false);
     const [productData, setProductData] = useState(null);
     const [productTypes, setProductTypes] = useState([]);
+    const [selectedProductType, setSelectedProductType] = useState('');
     const [categories, setCategories] = useState([]);
     const [subCategories, setSubCategories] = useState([]);
     const [brands, setBrands] = useState([]);
+    const [productCategory, setProductCategory] = useState('All');
     const [selectedCategory, setSelectedCategory] = useState('');
     const [selectedSubCategory, setSelectedSubCategory] = useState('');
     const [selectedBrand, setSelectedBrand] = useState('');
@@ -61,6 +66,26 @@ export default function AddProduct() {
     const [selectedSchemes, setSelectedSchemes] = useState([]);
     const [schemeLoading, setSchemeLoading] = useState(true);
     const [selectedSchemeId, setSelectedSchemeId] = useState('');
+
+    // SIMILAR PRODUCTS
+
+    const location = useLocation();
+
+    const isSimilarProduct = Boolean(
+        location.state?.isSimilarProduct && !editProductId
+    );
+
+    const similarProductTemplate = isSimilarProduct
+        ? location.state?.similarProduct
+        : null;
+    const sourceProductId = isSimilarProduct
+        ? (
+            location.state?.sourceProductId ||
+            location.state?.similarProduct?.id ||
+            null
+        )
+        : null;
+
     useEffect(() => {
         let active = true;
         const loadCatalogOptions = async () => {
@@ -84,6 +109,7 @@ export default function AddProduct() {
                     setProductTypes(productTypeResponse.data.data || []);
                     setCategories(categoryResponse.data.data || []);
                     setBrands(brandResponse.data.data || []);
+                    
                 }
             } catch (error) {
                 if (!active) return;
@@ -101,8 +127,8 @@ export default function AddProduct() {
             collection(db, 'products'),
             (snapshot) => {
                 setProductOptions(snapshot.docs.map(document => ({
-                    id: document.id,
                     ...document.data(),
+                    id: document.id,
                 })));
                 setRelatedProductsLoading(false);
             },
@@ -163,22 +189,36 @@ export default function AddProduct() {
 
                 const data = productSnapshot.data();
                 setProductData(data);
+                setSelectedProductType(data.productType === 'general' ? '' : (data.productType || ''));
                 setSelectedCategory(data.categoryId || (data.category === 'general' ? '' : data.category) || '');
                 setSelectedSubCategory(data.subCategoryId || (data.subCategory === 'general' ? '' : data.subCategory) || '');
                 setSelectedBrand(data.brandId || (data.brand === 'general' ? '' : data.brand) || '');
+                setProductCategory(data.productCategory || 'All');
                 setStockInfo({
-                    quantity: data.quantity ?? '',
+                    quantity: data.quantity !== undefined && data.quantity !== null ? data.quantity : '',
                     unit: data.unit || 'g',
-                    stock: data.stock ?? '',
+                    stock: data.stock !== undefined && data.stock !== null ? data.stock : '',
                 });
                 setPricing({
-                    mrp: data.mrp ?? '',
-                    distributorPrice: data.distributorPrice ?? '',
-                    offerPrice: data.offerPrice ?? '',
+                    mrp: data.mrp !== undefined && data.mrp !== null ? data.mrp : '',
+                    distributorPrice: data.distributorPrice !== undefined && data.distributorPrice !== null ? data.distributorPrice : '',
+                    offerPrice: data.offerPrice !== undefined && data.offerPrice !== null ? data.offerPrice : '',
                 });
+                setIsActive(data.isActive !== undefined ? Boolean(data.isActive) : true);
+                setProductVisible(data.productVisible !== undefined ? Boolean(data.productVisible) : true);
                 setTaxApplicable(Boolean(data.taxApplicable));
-                setRelatedProducts(data.relatedProduct || []);
-                // Restore previously selected schemes and their offer prices
+                setTaxPercentage(
+                    data.taxPercentage !== undefined && data.taxPercentage !== null
+                        ? String(data.taxPercentage)
+                        : ''
+                );
+                setRelatedProducts(
+                    Array.isArray(data.relatedProduct)
+                        ? data.relatedProduct
+                        : Array.isArray(data.relatedProducts)
+                            ? data.relatedProducts
+                            : []
+                );
                 const existingSchemes = Array.isArray(data.schemes)
                     ? data.schemes
                     : [];
@@ -221,6 +261,88 @@ export default function AddProduct() {
         loadProduct();
         return () => { active = false; };
     }, [editProductId, showToast]);
+
+    // SIMILAR PRODUCTS
+
+    useEffect(() => {
+        if (!similarProductTemplate || editProductId) return;
+
+        const data = similarProductTemplate;
+
+        setSelectedProductType(
+            data.productType === 'general' ? '' : (data.productType || '')
+        );
+
+        setSelectedCategory(
+            data.categoryId ||
+            (data.category === 'general' ? '' : data.category) ||
+            ''
+        );
+
+        setSelectedSubCategory(
+            data.subCategoryId ||
+            (data.subCategory === 'general' ? '' : data.subCategory) ||
+            ''
+        );
+
+        setSelectedBrand(
+            data.brandId ||
+            (data.brand === 'general' ? '' : data.brand) ||
+            ''
+        );
+
+        setProductCategory(data.productCategory || 'All');
+
+        setDetails({
+            description: data.details?.description || '',
+            shelfLife: data.details?.shelfLife || '',
+            storageInstructions: data.details?.storageInstructions || '',
+            ingredients: data.details?.ingredients || '',
+        });
+        const existingRelated = Array.isArray(data.relatedProduct)
+            ? data.relatedProduct
+            : Array.isArray(data.relatedProducts)
+                ? data.relatedProducts
+                : [];
+        setRelatedProducts(existingRelated);
+        setStockInfo({
+            quantity: '',
+            unit: 'g',
+            stock: '',
+        });
+        setExistingThumbnail(data.thumbnail || '');
+
+        setExistingGallery(
+            Array.isArray(data.images) ? data.images : []
+        );
+
+        setThumbnail(null);
+        setGallery([]);
+        setPricing({
+            mrp: '',
+            distributorPrice: '',
+            offerPrice: '',
+        });
+
+        setIsActive(data.isActive !== undefined ? Boolean(data.isActive) : true);
+        setProductVisible(data.productVisible !== undefined ? Boolean(data.productVisible) : true);
+        setTaxApplicable(Boolean(data.taxApplicable));
+        setTaxPercentage(
+            data.taxPercentage !== undefined && data.taxPercentage !== null
+                ? String(data.taxPercentage)
+                : ''
+        );
+        setSelectedSchemes([]);
+        setSelectedSchemeId('');
+        setSchemeOfferPrice('');
+
+    }, [
+        similarProductTemplate,
+        sourceProductId,
+        editProductId,
+    ]);
+
+
     useEffect(() => {
         let active = true;
 
@@ -268,13 +390,18 @@ export default function AddProduct() {
     const updatePricing = (field, value) => setPricing(prev => ({ ...prev, [field]: value }));
     const selectRelatedProduct = (product) => {
         setRelatedProducts(prev => (
-            prev.some(relatedProduct => relatedProduct.productId === product.id)
+            prev.some(item => item.productId === product.id)
                 ? prev
-                : [...prev, {
-                    productId: product.id,
-                    productName: product.productName || '',
-                }]
+                : [
+                    ...prev,
+                    {
+                        productId: product.id,
+                        productName: product.productName || '',
+                        thumbnail: product.thumbnail || '',
+                    },
+                ]
         ));
+
         setRelatedProductSearch('');
         setRelatedProductDropdownOpen(false);
     };
@@ -354,42 +481,52 @@ export default function AddProduct() {
         </div>
     );
 
-    const Toggle = ({ id, label, description }) => (
-        <label
-            htmlFor={id}
-            className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-tertiary/40 bg-slate-50/60 p-3 transition hover:bg-slate-50"
-        >
-            <div>
-                <p className="text-sm font-semibold text-gray-900">
-                    {label}
-                </p>
+    const Toggle = ({ id, label, description }) => {
+        const checked = id === 'taxApplicable'
+            ? taxApplicable
+            : id === 'isActive'
+                ? isActive
+                : productVisible;
 
-                <p className="mt-0.5 text-xs text-secondary/80">
-                    {description}
-                </p>
-            </div>
+        const onChange = (event) => {
+            const val = event.target.checked;
+            if (id === 'taxApplicable') setTaxApplicable(val);
+            else if (id === 'isActive') setIsActive(val);
+            else if (id === 'productVisible') setProductVisible(val);
+        };
 
-            <span className="relative inline-flex shrink-0 items-center">
-                <input
-                    type="checkbox"
-                    id={id}
-                    name={id}
-                    {...(id === 'taxApplicable'
-                        ? { checked: taxApplicable, onChange: (event) => setTaxApplicable(event.target.checked) }
-                        : {
-                            defaultChecked: id === 'isActive'
-                                ? (productData?.isActive ?? true)
-                                : (productData?.productVisible ?? true)
-                        })}
-                    className="peer sr-only"
-                />
+        return (
+            <label
+                htmlFor={id}
+                className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-tertiary/40 bg-slate-50/60 p-3 transition hover:bg-slate-50"
+            >
+                <div>
+                    <p className="text-sm font-semibold text-gray-900">
+                        {label}
+                    </p>
 
-                <span className="h-5 w-9 rounded-full bg-slate-300 transition-colors peer-checked:bg-emerald-500 peer-focus-visible:ring-4 peer-focus-visible:ring-primary/20" />
+                    <p className="mt-0.5 text-xs text-secondary/80">
+                        {description}
+                    </p>
+                </div>
 
-                <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-4" />
-            </span>
-        </label>
-    );
+                <span className="relative inline-flex shrink-0 items-center">
+                    <input
+                        type="checkbox"
+                        id={id}
+                        name={id}
+                        checked={checked}
+                        onChange={onChange}
+                        className="peer sr-only"
+                    />
+
+                    <span className="h-5 w-9 rounded-full bg-slate-300 transition-colors peer-checked:bg-emerald-500 peer-focus-visible:ring-4 peer-focus-visible:ring-primary/20" />
+
+                    <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-4" />
+                </span>
+            </label>
+        );
+    };
 
     const SelectField = ({
         id,
@@ -503,6 +640,13 @@ export default function AddProduct() {
     };
     const handleSubmit = async (event) => {
         event.preventDefault();
+        if (isSimilarProduct && !sourceProductId) {
+            showToast(
+                'Source product ID is missing. Please return to Products and try again.',
+                'error'
+            );
+            return;
+        }
         const formData = new FormData(event.currentTarget);
         const formValue = (name) => formData.get(name)?.toString().trim() || '';
         const numberValue = (name) => {
@@ -535,46 +679,64 @@ export default function AddProduct() {
             const fields = {
                 productName: formValue('productName'),
                 productSKU: formValue('productSKU'),
-                productType: formValue('productType'),
+                productType: selectedProductType || formValue('productType'),
                 category,
                 categoryId,
                 subCategory,
                 subCategoryId,
                 brand,
                 brandId,
+                productCategory,
                 schemes: selectedSchemes.map(scheme => ({
                     schemeId: scheme.schemeId,
                     offerPrice: Number(scheme.offerPrice),
                 })),
-
-                schemeIds: selectedSchemes.map(scheme => scheme.schemeId),
+                schemeIds: selectedSchemes.map(
+                    scheme => scheme.schemeId
+                ),
                 relatedProduct: relatedProducts
-                    .filter(product => product.productId && product.productName)
-                    .map(product => ({
-                        productId: product.productId,
-                        productName: product.productName,
-                    })),
+                    .filter(product => product.productId)
+                    .map(product => {
+                        const matched = productOptions.find(opt => opt.id === product.productId);
+                        return {
+                            productId: product.productId,
+                            productName: product.productName || matched?.productName || '',
+                        };
+                    })
+                    .filter(product => product.productId && product.productName),
                 details: {
                     description: details.description.trim(),
                     shelfLife: details.shelfLife.trim(),
                     storageInstructions: details.storageInstructions.trim(),
                     ingredients: details.ingredients.trim(),
                 },
-                isActive: formData.has('isActive'),
+                isActive: Boolean(isActive),
                 taxApplicable,
-                taxPercentage: taxApplicable ? numberValue('taxPercentage') : null,
-                productVisible: formData.has('productVisible'),
+                taxPercentage: taxApplicable
+                    ? (taxPercentage !== '' && taxPercentage !== null ? Number(taxPercentage) : numberValue('taxPercentage'))
+                    : null,
+                productVisible: Boolean(productVisible),
                 codeLetters: formValue('codeLetters'),
                 codeNumber: numberValue('codeNumber'),
                 hsnCode: formValue('hsnCode'),
-                quantity: numberValue('quantity'),
-                unit: formValue('unit'),
-                stock: numberValue('stock'),
-                mrp: numberValue('mrp'),
-                distributorPrice: numberValue('distributorPrice'),
-                offerPrice: numberValue('offerPrice'),
+                quantity: stockInfo.quantity !== '' ? Number(stockInfo.quantity) : numberValue('quantity'),
+                unit: stockInfo.unit || formValue('unit'),
+                stock: stockInfo.stock !== '' ? Number(stockInfo.stock) : numberValue('stock'),
+                mrp: pricing.mrp !== '' ? Number(pricing.mrp) : numberValue('mrp'),
+                distributorPrice: pricing.distributorPrice !== '' ? Number(pricing.distributorPrice) : numberValue('distributorPrice'),
+                offerPrice: pricing.offerPrice !== '' ? Number(pricing.offerPrice) : numberValue('offerPrice'),
                 thumbnail: thumbnailUrl || existingThumbnail,
-                images: [...existingGallery, ...images],
+                images: [
+                    ...existingGallery,
+                    ...images,
+                ],
+                ...(
+                    isSimilarProduct && !editProductId
+                        ? {
+                            sourceProductId: sourceProductId,
+                        }
+                        : {}
+                ),
             };
             const response = await manageProductCallable(editProductId ? {
                 action: 'edit',
@@ -618,6 +780,7 @@ export default function AddProduct() {
         item.id === selectedBrand || item.brandName === selectedBrand
     ));
     const selectedBrandValue = selectedBrandEntry?.id || (selectedBrand === 'general' ? '' : selectedBrand);
+    const selectProCatValue = ['All', 'Monthly Van', 'Courier'];
 
     if (loadingProduct) {
         return <div className="p-8 text-center text-sm text-gray-600">Loading product...</div>;
@@ -642,7 +805,8 @@ export default function AddProduct() {
                 <div className="flex items-center justify-between gap-3 border-b border-tertiary/30 py-4">
                     <div>
                         <h1 className="bg-gradient-to-br from-primary to-secondary bg-clip-text text-xl font-bold text-transparent sm:text-2xl">
-                            {editProductId ? 'Edit Product' : 'Add New Product'}
+                            {editProductId
+                                ? 'Edit Product' : isSimilarProduct ? 'Add Similar Product' : 'Add New Product'}
                         </h1>
                     </div>
 
@@ -656,7 +820,7 @@ export default function AddProduct() {
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form key={editProductId || (isSimilarProduct ? (sourceProductId || 'similar') : 'new')} onSubmit={handleSubmit} className="space-y-4">
 
                     {/* General Information */}
                     <section className={sectionClass}>
@@ -671,7 +835,8 @@ export default function AddProduct() {
                                 label="Product Name"
                                 placeholder="e.g. Premium Arabica Coffee"
                                 required
-                                defaultValue={productData?.productName || ''}
+                                defaultValue={productData?.productName || similarProductTemplate?.productName ||
+                                    ''}
                             />
 
                             <TextField
@@ -679,23 +844,33 @@ export default function AddProduct() {
                                 label="Product SKU"
                                 placeholder="20"
                                 required
-                                defaultValue={productData?.productSKU || ''}
+                                defaultValue={productData?.productSKU || similarProductTemplate?.productSKU ||
+                                    ''}
                             />
 
                             <SelectField
                                 id="productType"
                                 label="Product Type"
                                 required
-                                defaultValue={productData?.productType === 'general' ? '' : (productData?.productType || '')}
+                                value={selectedProductType}
+                                onChange={(event) => setSelectedProductType(event.target.value)}
                                 options={[
                                     ...productTypes.map(type => ({
                                         value: type.productTypeName,
                                         label: type.productTypeName,
                                     })),
-                                    ...(productData?.productType && productData.productType !== 'general'
-                                        && !productTypes.some(type => type.productTypeName === productData.productType)
-                                        ? [{ value: productData.productType, label: productData.productType }]
-                                        : []),
+                                    ...(
+                                        selectedProductType &&
+                                            selectedProductType !== 'general' &&
+                                            !productTypes.some(
+                                                type => type.productTypeName === selectedProductType
+                                            )
+                                            ? [{
+                                                value: selectedProductType,
+                                                label: selectedProductType,
+                                            }]
+                                            : []
+                                    ),
                                 ]}
                             />
 
@@ -715,7 +890,11 @@ export default function AddProduct() {
                                     })),
                                     ...(selectedCategoryValue
                                         && !categories.some(category => category.id === selectedCategoryValue)
-                                        ? [{ value: selectedCategoryValue, label: productData?.category || selectedCategoryValue }]
+                                        ? [{
+                                            value: selectedCategoryValue, label: productData?.category ||
+                                                similarProductTemplate?.category ||
+                                                selectedCategoryValue
+                                        }]
                                         : []),
                                 ]}
                             />
@@ -733,7 +912,11 @@ export default function AddProduct() {
                                     })),
                                     ...(selectedSubCategoryValue
                                         && !availableSubCategories.some(subCategory => subCategory.id === selectedSubCategoryValue)
-                                        ? [{ value: selectedSubCategoryValue, label: productData?.subCategory || selectedSubCategoryValue }]
+                                        ? [{
+                                            value: selectedSubCategoryValue, label: productData?.subCategory ||
+                                                similarProductTemplate?.subCategory ||
+                                                selectedSubCategoryValue
+                                        }]
                                         : []),
                                 ]}
                             />
@@ -751,10 +934,46 @@ export default function AddProduct() {
                                     })),
                                     ...(selectedBrandValue
                                         && !brands.some(brand => brand.id === selectedBrandValue)
-                                        ? [{ value: selectedBrandValue, label: productData?.brand || selectedBrandValue }]
+                                        ? [{
+                                            value: selectedBrandValue, label: productData?.brand ||
+                                                similarProductTemplate?.brand ||
+                                                selectedBrandValue
+                                        }]
                                         : []),
                                 ]}
                             />
+                            <div className="min-w-0">
+                                <label htmlFor="productCategory" className={labelClass}>
+                                    Product Category
+                                    <span className="ml-1 text-rose-500">*</span>
+                                </label>
+
+                                <div className="relative">
+                                    <select
+                                        id="productCategory"
+                                        name="productCategory"
+                                        value={productCategory}
+                                        onChange={(event) => setProductCategory(event.target.value)}
+                                        required
+                                        className={`${inputClass} appearance-none pr-9`}
+                                    >
+                                        <option value="" disabled>
+                                            Select product category
+                                        </option>
+
+                                        {selectProCatValue.map((category) => (
+                                            <option key={category} value={category}>
+                                                {category}
+                                            </option>
+                                        ))}
+                                    </select>
+
+                                    <ChevronDown
+                                        size={15}
+                                        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-secondary/60"
+                                    />
+                                </div>
+                            </div>
 
                         </div>
                         <div className="mt-3">
@@ -947,8 +1166,11 @@ export default function AddProduct() {
                                 <div className="mt-2 flex flex-wrap gap-2 rounded-lg border border-tertiary/40 bg-slate-50/50 p-2">
                                     {relatedProducts.map((product, index) => {
                                         const productOption = productOptions.find(option => option.id === product.productId);
-                                        const image = productOption?.thumbnail || productOption?.images?.[0];
-
+                                        const image =
+                                            productOption?.thumbnail ||
+                                            productOption?.images?.[0] ||
+                                            product.thumbnail ||
+                                            '';
                                         return (
                                             <div
                                                 key={`${product.productId}-${index}`}
@@ -1009,7 +1231,8 @@ export default function AddProduct() {
                                             step="0.01"
                                             placeholder="Enter tax percentage"
                                             required
-                                            defaultValue={productData?.taxPercentage ?? ''}
+                                            value={taxPercentage}
+                                            onChange={(e) => setTaxPercentage(e.target.value)}
                                             className={`${inputClass} pr-8`}
                                         />
                                         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-secondary/70">%</span>
@@ -1128,7 +1351,11 @@ export default function AddProduct() {
                                 label="Code Letters"
                                 placeholder="e.g. ABC"
                                 required
-                                defaultValue={productData?.codeLetters || ''}
+                                defaultValue={
+                                    productData?.codeLetters ??
+                                    similarProductTemplate?.codeLetters ??
+                                    ''
+                                }
                             />
 
                             <TextField
@@ -1139,14 +1366,22 @@ export default function AddProduct() {
                                 min="0"
                                 step="1"
                                 required
-                                defaultValue={productData?.codeNumber ?? ''}
+                                defaultValue={
+                                    productData?.codeNumber ??
+                                    similarProductTemplate?.codeNumber ??
+                                    ''
+                                }
                             />
 
                             <TextField
                                 id="hsnCode"
                                 label="HSN Code"
                                 placeholder="Enter HSN code"
-                                defaultValue={productData?.hsnCode || ''}
+                                defaultValue={
+                                    productData?.hsnCode ??
+                                    similarProductTemplate?.hsnCode ??
+                                    ''
+                                }
                             />
                         </div>
                     </section>
@@ -1475,7 +1710,7 @@ export default function AddProduct() {
                                     <Plus size={16} />
                                     {submitting
                                         ? (editProductId ? 'Saving Changes...' : 'Adding Product...')
-                                        : (editProductId ? 'Save Changes' : 'Add Product')}
+                                        : (editProductId ? 'Save Changes' : isSimilarProduct ? 'Add Similar Product' : 'Add  Product')}
                                 </button>
                             </div>
                         </div>
