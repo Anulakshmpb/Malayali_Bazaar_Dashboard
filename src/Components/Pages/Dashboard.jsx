@@ -109,10 +109,10 @@ export default function Dashboard() {
                     const list = snapshot.docs.map((docSnap) => {
                         const data = docSnap.data();
                         return {
-                            name: data.name || docSnap.id,
+                            name: data.productName || data.name || docSnap.id,
                             orders: `${Number(data.quantity || 0).toLocaleString("en-IN")} sold`,
                             price: formatCurrency(data.revenue || 0),
-                            image: data.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=200&h=200',
+                            image: data.image || data.thumbnail || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=200&h=200',
                         };
                     });
                     setMostOrdered(list);
