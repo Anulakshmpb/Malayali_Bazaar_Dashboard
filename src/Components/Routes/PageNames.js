@@ -29,4 +29,5 @@ export const PAGE_NAMES = [
   'SchemeManagement',
   'Notification Templates',
   'Send Notification',
+  'Promocode',
 ];

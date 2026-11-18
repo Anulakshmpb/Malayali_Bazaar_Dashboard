@@ -8,10 +8,10 @@ const categories = db.collection("category");
 const subCategories = db.collection("subCategory");
 const brands = db.collection("brand");
 const productTypes = db.collection("productTypes");
-const deliveryCharges = db.collection("deliveryCharges");
 const banners = db.collection("banners");
 const sections = db.collection("sections");
 const schemes = db.collection("schemes");
+const promocodes = db.collection("promocodes");
 
 // Common helpers
 const validate = (schema, data) => {
@@ -772,41 +772,63 @@ export const manageBanner = callableWrapper(async (req) => {
 });
 
 // =====================================================
-// 4. DELIVERY CHARGES
+// 4. PROMOCODE
 // =====================================================
 
-const deliveryChargeSchema = Joi.object({
-  deliveryChargeId: Joi.string().allow(null, ""),
-  deliveryType: Joi.string().required(),
-  deliveryCharge: Joi.number().required(),
-  freeDeliveryMinimum: Joi.number().required(),
-  status: Joi.boolean().required(),
-});
+const promocodeSchema = Joi.object({
+  promoCodeId: Joi.string().allow(null, "").optional(),
+  name: Joi.string().trim().required(),
+  code: Joi.string().trim().required(),
+  desc: Joi.string().allow("").optional(),
+  discountType: Joi.string().valid("percentage", "fixed")
+      .default("percentage"),
+  discountValue: Joi.number().min(0).required(),
+  startDate: Joi.alternatives().try(Joi.date(), Joi.string()).required(),
+  expirationDate: Joi.alternatives().try(Joi.date(), Joi.string()).required(),
+  minimumOrderValue: Joi.number().min(0).default(0),
+  maxDiscountValue: Joi.number().min(0).allow(null, "").optional(),
+  usageLimit: Joi.number().integer().min(0).default(1000),
+  usagePerUser: Joi.number().integer().min(1).default(1),
+  currentUsage: Joi.number().min(0).default(0),
+  usageLeft: Joi.number().min(0).optional(),
+  eligibleCustomers: Joi.array().items(Joi.string()).default([]),
+  eligibleProducts: Joi.array().items(Joi.string()).default([]),
+  isCommon: Joi.boolean().default(false),
+  isCustomersOnly: Joi.boolean().default(false),
+  isSingleUse: Joi.boolean().default(false),
+  status: Joi.boolean().default(true),
+  visibility: Joi.boolean().default(true),
+}).unknown(true);
 
-export const manageDeliveryCharge = callableWrapper(async (req) => {
+export const managePromocode = callableWrapper(async (req) => {
   try {
     requireAuth(req);
     const action = getAction(req);
     const fields = getFields(req);
 
     // =====================================================
-    // LIST DELIVERY CHARGE
+    // LIST PROMOCODE
     // =====================================================
     if (action === "list") {
-      let query = deliveryCharges.orderBy("createdAt", "desc");
+      let query = promocodes.orderBy("createdAt", "desc");
 
-      if (fields.deliveryChargeId) {
-        query = deliveryCharges.where("deliveryChargeId",
-            "==", fields.deliveryChargeId);
+      const targetId = fields.promocodeId || fields.promoCodeId;
+      if (targetId) {
+        query = promocodes.where("promocodeId", "==", targetId);
       }
 
       const snapshot = await query.get();
       return {
         success: true,
-        data: snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })),
+        data: snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            promoCodeId: doc.id,
+            promocodeId: doc.id,
+            ...data,
+          };
+        }),
       };
     }
 
@@ -814,96 +836,163 @@ export const manageDeliveryCharge = callableWrapper(async (req) => {
     // DELETE
     // =====================================================
     if (action === "delete") {
-      const {deliveryChargeId} = fields;
+      const promocodeId = fields.promocodeId || fields.promoCodeId;
 
-      if (!deliveryChargeId) {
+      if (!promocodeId) {
         return {
           success: false,
-          message: "deliveryChargeId is required",
+          message: "promocodeId is required",
         };
       }
 
-      const deliveryChargeRef = deliveryCharges.doc(deliveryChargeId);
-      const deliveryChargeDoc = await deliveryChargeRef.get();
+      const promocodeRef = promocodes.doc(promocodeId);
+      const promocodeDoc = await promocodeRef.get();
 
-      if (!deliveryChargeDoc.exists) {
+      if (!promocodeDoc.exists) {
         return {
           success: false,
-          message: "Delivery charge not found",
+          message: "promocode not found",
         };
       }
 
-      await deliveryChargeRef.delete();
+      await promocodeRef.delete();
 
       return {
         success: true,
-        deliveryChargeId,
-        message: "Delivery charge deleted successfully",
+        promocodeId,
+        promoCodeId: promocodeId,
+        message: "promocode deleted successfully",
       };
     }
 
     // =====================================================
     // VALIDATE ADD / UPDATE DATA
     // =====================================================
-    const result = validate(deliveryChargeSchema, fields);
+    const result = validate(promocodeSchema, fields);
     if (!result.success) {
       return result;
     }
-    const {deliveryChargeId,
-      deliveryType,
-      deliveryCharge: deliveryChargeAmount,
-      freeDeliveryMinimum,
-      status} = result.data;
-    const searchKey = deliveryType.trim().toLowerCase();
 
-    const duplicateSnapshot = await deliveryCharges
-        .where("searchKey", "==", searchKey)
+    const data = result.data;
+    const promocodeId = fields.promocodeId ||
+      fields.promoCodeId ||
+      data.promocodeId ||
+      data.promoCodeId;
+
+    const code = (data.code || "").trim().toUpperCase();
+    const searchKey = code.toLowerCase();
+    const duplicateSnapshot = await promocodes
+        .where("code", "==", code)
         .get();
 
     const duplicate = duplicateSnapshot.docs.find(
-        (doc) => doc.id !== deliveryChargeId,
+        (doc) => doc.id !== promocodeId,
     );
 
     if (duplicate) {
       return {
         success: false,
-        message: "Delivery charge name already exists",
+        message: `Promo code "${code}" already exists`,
       };
     }
+
+    const name = data.name.trim();
+    const desc = (data.desc !== undefined ? data.desc : data.description) || "";
+    const discountType = data.discountType || "percentage";
+    const discountValue = Number(data.discountValue || 0);
+    const startDate = data.startDate;
+    const expirationDate = data.expirationDate;
+    const minimumOrderValue = data.minimumOrderValue !== undefined ?
+      Number(data.minimumOrderValue) :
+      0;
+    const maxDiscountValue = (data.maxDiscountValue !== undefined &&
+      data.maxDiscountValue !== null &&
+      data.maxDiscountValue !== "") ?
+      Number(data.maxDiscountValue) :
+      null;
+    const usageLimit = data.usageLimit !== undefined ?
+      Number(data.usageLimit) :
+      1000;
+    const usagePerUser = data.usagePerUser !== undefined ?
+      Number(data.usagePerUser) :
+      1;
+    const currentUsage = data.currentUsage !== undefined ?
+      Number(data.currentUsage) :
+      0;
+    const usageLeft = data.usageLeft !== undefined ?
+      Number(data.usageLeft) :
+      Math.max(usageLimit - currentUsage, 0);
+    const eligibleCustomers = Array.isArray(data.eligibleCustomers) ?
+      data.eligibleCustomers :
+      [];
+    const eligibleProducts = Array.isArray(data.eligibleProducts) ?
+      data.eligibleProducts :
+      [];
+    const isCommon = Boolean(data.isCommon);
+    const isCustomersOnly = Boolean(data.isCustomersOnly);
+    const isSingleUse = Boolean(data.isSingleUse);
+    const status = data.status !== undefined ? Boolean(data.status) : true;
+    const visibility = data.visibility !== undefined ?
+      Boolean(data.visibility) :
+      true;
+
+    const promoData = {
+      name,
+      code,
+      desc,
+      discountType,
+      discountValue,
+      startDate,
+      expirationDate,
+      minimumOrderValue,
+      maxDiscountValue,
+      usageLimit,
+      usagePerUser,
+      currentUsage,
+      usageLeft,
+      eligibleCustomers,
+      eligibleProducts,
+      isCommon,
+      isCustomersOnly,
+      isSingleUse,
+      status,
+      visibility,
+      searchKey,
+      updatedAt: FieldValue.serverTimestamp(),
+    };
 
     // =====================================================
     // UPDATE
     // =====================================================
     if (action === "update") {
-      if (!deliveryChargeId) {
+      if (!promocodeId) {
         return {
           success: false,
-          message: "deliveryChargeId is required for update",
+          message: "promocodeId is required for update",
         };
       }
 
-      const deliveryChargeRef = deliveryCharges.doc(deliveryChargeId);
-      const deliveryChargeDoc = await deliveryChargeRef.get();
+      const promocodeRef = promocodes.doc(promocodeId);
+      const promocodeDoc = await promocodeRef.get();
 
-      if (!deliveryChargeDoc.exists) {
+      if (!promocodeDoc.exists) {
         return {
           success: false,
-          message: "Delivery charge not found",
+          message: "promocode not found",
         };
       }
 
-      await deliveryChargeRef.update({
-        deliveryType,
-        deliveryCharge: deliveryChargeAmount,
-        freeDeliveryMinimum,
-        status,
-        updatedAt: FieldValue.serverTimestamp(),
+      await promocodeRef.update({
+        ...promoData,
+        promocodeId,
+        promoCodeId: promocodeId,
       });
 
       return {
         success: true,
-        deliveryChargeId,
-        message: "Delivery charge updated successfully",
+        promocodeId,
+        promoCodeId: promocodeId,
+        message: "Promo code updated successfully",
       };
     }
 
@@ -911,33 +1000,33 @@ export const manageDeliveryCharge = callableWrapper(async (req) => {
     // ADD
     // =====================================================
     if (action === "add") {
-      const deliveryChargeRef = deliveryCharges.doc();
+      const promocodeRef = promocodes.doc();
 
-      await deliveryChargeRef.set({
-        deliveryChargeId: deliveryChargeRef.id,
-        deliveryType,
-        deliveryCharge: deliveryChargeAmount,
-        freeDeliveryMinimum,
-        status,
+      await promocodeRef.set({
+        promocodeId: promocodeRef.id,
+        promoCodeId: promocodeRef.id,
+        ...promoData,
         createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
       });
 
       return {
         success: true,
-        deliveryChargeId: deliveryChargeRef.id,
-        message: "Delivery charge added successfully",
+        promocodeId: promocodeRef.id,
+        promoCodeId: promocodeRef.id,
+        message: "Promo code added successfully",
       };
     }
 
     return {
       success: false,
-      message: "Invalid unit of measure action",
+      message: "Invalid promocode action",
     };
   } catch (error) {
-    return fail(error, "Unit of measure operation failed");
+    return fail(error, "Promo code operation failed");
   }
 });
+
+export const managePromoCode = managePromocode;
 // =====================================================
 // 4. SECTION MANAGEMENT
 // =====================================================

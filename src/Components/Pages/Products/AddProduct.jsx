@@ -780,7 +780,7 @@ export default function AddProduct() {
         item.id === selectedBrand || item.brandName === selectedBrand
     ));
     const selectedBrandValue = selectedBrandEntry?.id || (selectedBrand === 'general' ? '' : selectedBrand);
-    const selectProCatValue = ['All', 'Monthly Van', 'Courier'];
+    const selectProCatValue = ['Normal', 'Monthly Van', 'Courier'];
 
     if (loadingProduct) {
         return <div className="p-8 text-center text-sm text-gray-600">Loading product...</div>;
