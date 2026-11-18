@@ -27,6 +27,7 @@ import Notification from '../Pages/Notifications/Notification';
 import SchemeManagement from '../Pages/Products/Scheme';
 import SendNotification from '../Pages/Notifications/SendNotification';
 import NotificationTemplates from '../Pages/Notifications/NotificatoinTemplate';
+import PromoCode from '../Pages/PromoCode/PromoCode';
 
 export const PROTECTED_ROUTES = [
   {
@@ -173,5 +174,10 @@ export const PROTECTED_ROUTES = [
     path: "/send-notification",
     name: 'Send Notification',
     element: SendNotification
+},
+{
+    path: "/promocode",
+    name: 'Promocode',
+    element: PromoCode
 }
 ];

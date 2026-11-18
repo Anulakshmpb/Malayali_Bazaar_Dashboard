@@ -59,6 +59,11 @@ const MENU_ITEMS = [
           },
         ],
       },
+      {
+        name: "Promocode",
+        path: "/promocode",
+        icon: Layers,
+      },
 
       {
         name: "Section Management",
