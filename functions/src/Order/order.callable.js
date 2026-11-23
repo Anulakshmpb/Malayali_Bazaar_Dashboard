@@ -1,7 +1,11 @@
 /* eslint-disable max-len */
 import {callableWrapper} from "../../shared/callable.wrapper.js";
-import {validatePlaceOrder} from "./order.validation.js";
-import {placeOrderService, postOrderTasks} from "./order.service.js";
+import {validatePlaceOrder, validateCheckPromoCode} from "./order.validation.js";
+import {
+  placeOrderService,
+  postOrderTasks,
+  validatePromoCodeService,
+} from "./order.service.js";
 import {logInfo, logError} from "../../shared/logger.js";
 
 export const placeOrder = callableWrapper(async (req) => {
@@ -44,6 +48,30 @@ export const placeOrder = callableWrapper(async (req) => {
     return {
       success: false,
       message: error.message || "Failed to place order.",
+    };
+  }
+});
+
+export const validatePromoCode = callableWrapper(async (req) => {
+  const validation = validateCheckPromoCode(req.data || {});
+  if (!validation.success) {
+    return {
+      success: false,
+      message: validation.message,
+    };
+  }
+
+  try {
+    const userId = req.auth ? req.auth.uid : null;
+    const result = await validatePromoCodeService(userId, validation.data);
+    return {
+      success: true,
+      data: result,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: error.message || "Failed to validate promo code.",
     };
   }
 });

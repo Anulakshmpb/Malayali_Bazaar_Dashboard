@@ -36,6 +36,7 @@ import {
 } from "./src/Delivery/deliveryPlace.callable.js";
 import {
   placeOrder,
+  validatePromoCode,
 } from "./src/Order/order.callable.js";
 setGlobalOptions({maxInstances: 10});
 
@@ -60,4 +61,5 @@ export {manageAdmin,
   recordCustomerPayment,
   manageDeliveryPlace,
   placeOrder,
+  validatePromoCode,
 };
