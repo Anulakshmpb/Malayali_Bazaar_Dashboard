@@ -109,7 +109,7 @@ export default function AddProduct() {
                     setProductTypes(productTypeResponse.data.data || []);
                     setCategories(categoryResponse.data.data || []);
                     setBrands(brandResponse.data.data || []);
-                    
+
                 }
             } catch (error) {
                 if (!active) return;
@@ -1492,9 +1492,6 @@ export default function AddProduct() {
                                             />
                                         </div>
                                     </div>
-
-
-
                                     {/* Offer Price */}
                                     <div className="min-w-0">
                                         <label htmlFor="offerPrice" className={labelClass}>Offer Price</label>
@@ -1509,183 +1506,184 @@ export default function AddProduct() {
                                             />
                                         </div>
                                     </div>
-                                    {/* Scheme Offers */}
-                                    <section className={sectionClass}>
-                                        {heading(DollarSign, 'Scheme Offers')}
 
-                                        <div className="space-y-1">
-
-                                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto] items-end">
-
-                                                <div className="w-full">
-                                                    <label htmlFor="schemeSelect" className={labelClass}>
-                                                        Select Scheme
-                                                    </label>
-
-                                                    <div className="relative">
-                                                        <select
-                                                            id="schemeSelect"
-                                                            value={selectedSchemeId}
-                                                            onChange={event =>
-                                                                setSelectedSchemeId(event.target.value)
-                                                            }
-                                                            disabled={schemeLoading}
-                                                            className={`${inputClass} appearance-none pr-9`}
-                                                        >
-                                                            <option value="">
-                                                                {schemeLoading
-                                                                    ? 'Loading schemes...'
-                                                                    : 'Choose a scheme'}
-                                                            </option>
-
-                                                            {schemeOptions
-                                                                .filter(scheme =>
-                                                                    !selectedSchemes.some(
-                                                                        selected =>
-                                                                            selected.schemeId === scheme.schemeId
-                                                                    )
-                                                                )
-                                                                .map(scheme => (
-                                                                    <option
-                                                                        key={scheme.schemeId}
-                                                                        value={scheme.schemeId}
-                                                                    >
-                                                                        {scheme.schemeName}
-                                                                    </option>
-                                                                ))}
-                                                        </select>
-
-                                                        <ChevronDown
-                                                            size={15}
-                                                            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-secondary/60"
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                {/* Offer Price */}
-                                                <div className="w-full">
-                                                    <label htmlFor="schemeOfferPrice" className={labelClass}>
-                                                        Offer Price
-                                                    </label>
-
-                                                    <div className="relative">
-                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-secondary/70">
-                                                            ₹
-                                                        </span>
-
-                                                        <input
-                                                            type="number"
-                                                            id="schemeOfferPrice"
-                                                            value={schemeOfferPrice}
-                                                            onChange={event =>
-                                                                setSchemeOfferPrice(event.target.value)
-                                                            }
-                                                            placeholder="Enter offer price"
-                                                            min="0"
-                                                            step="0.01"
-                                                            className={`${inputClass} !pl-8`}
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                {/* Add Button */}
-                                                <button
-                                                    type="button"
-                                                    onClick={addSelectedScheme}
-                                                    disabled={
-                                                        !selectedSchemeId ||
-                                                        !schemeOfferPrice ||
-                                                        Number(schemeOfferPrice) <= 0 ||
-                                                        schemeLoading
-                                                    }
-                                                    className="flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-white transition hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
-                                                >
-                                                    <Plus size={15} />
-                                                    Add
-                                                </button>
-                                            </div>
-
-                                            {/* Added Schemes */}
-                                            {selectedSchemes.length > 0 && (
-                                                <div className="space-y-1 pt-1">
-
-                                                    <div className="flex items-center justify-between">
-                                                        <p className="text-xs font-semibold text-secondary/70">
-                                                            Added Schemes
-                                                        </p>
-
-                                                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                                                            {selectedSchemes.length} Added
-                                                        </span>
-                                                    </div>
-
-                                                    <div className="space-y-2">
-                                                        {selectedSchemes.map((selectedScheme, index) => {
-                                                            const scheme = schemeOptions.find(
-                                                                item =>
-                                                                    item.schemeId === selectedScheme.schemeId
-                                                            );
-
-                                                            return (
-                                                                <div
-                                                                    key={selectedScheme.schemeId}
-                                                                    className="flex items-center justify-between gap-3 rounded-lg border border-tertiary/40 bg-slate-50/60 px-3 py-2 transition hover:border-primary/30"
-                                                                >
-                                                                    {/* Scheme Name */}
-                                                                    <div className="flex min-w-0 flex-1 items-center gap-2">
-                                                                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-[11px] font-bold text-primary">
-                                                                            {index + 1}
-                                                                        </span>
-
-                                                                        <h4 className="truncate text-xs font-semibold text-gray-900">
-                                                                            {scheme?.schemeName || 'Scheme'}
-                                                                        </h4>
-                                                                    </div>
-
-                                                                    {/* Offer Price */}
-                                                                    <div className="flex shrink-0 items-center gap-1.5">
-                                                                        <span className="text-xs text-secondary/60">
-                                                                            Offer:
-                                                                        </span>
-
-                                                                        <span className="text-sm font-semibold text-gray-800">
-                                                                            ₹{Number(selectedScheme.offerPrice || 0).toFixed(2)}
-                                                                        </span>
-                                                                    </div>
-
-                                                                    {/* Delete */}
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() =>
-                                                                            removeSelectedScheme(
-                                                                                selectedScheme.schemeId
-                                                                            )
-                                                                        }
-                                                                        aria-label="Delete scheme"
-                                                                        title="Delete scheme"
-                                                                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-rose-500 transition hover:bg-rose-50"
-                                                                    >
-                                                                        <Trash2 size={14} />
-                                                                    </button>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Empty State */}
-                                            {selectedSchemes.length === 0 && (
-                                                <p className="py-2 text-center text-xs text-secondary/50">
-                                                    No schemes added yet.
-                                                </p>
-                                            )}
-                                        </div>
-                                    </section>
 
                                 </div>
                             </div>
 
+                        </div>
+                    </section>
+                    {/* Scheme Offers */}
+                    <section className={sectionClass}>
+                        {heading(DollarSign, 'Scheme Offers')}
+
+                        <div className="space-y-1">
+
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto] items-end">
+
+                                <div className="w-full">
+                                    <label htmlFor="schemeSelect" className={labelClass}>
+                                        Select Scheme
+                                    </label>
+
+                                    <div className="relative">
+                                        <select
+                                            id="schemeSelect"
+                                            value={selectedSchemeId}
+                                            onChange={event =>
+                                                setSelectedSchemeId(event.target.value)
+                                            }
+                                            disabled={schemeLoading}
+                                            className={`${inputClass} appearance-none pr-9`}
+                                        >
+                                            <option value="">
+                                                {schemeLoading
+                                                    ? 'Loading schemes...'
+                                                    : 'Choose a scheme'}
+                                            </option>
+
+                                            {schemeOptions
+                                                .filter(scheme =>
+                                                    !selectedSchemes.some(
+                                                        selected =>
+                                                            selected.schemeId === scheme.schemeId
+                                                    )
+                                                )
+                                                .map(scheme => (
+                                                    <option
+                                                        key={scheme.schemeId}
+                                                        value={scheme.schemeId}
+                                                    >
+                                                        {scheme.schemeName}
+                                                    </option>
+                                                ))}
+                                        </select>
+
+                                        <ChevronDown
+                                            size={15}
+                                            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-secondary/60"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Offer Price */}
+                                <div className="w-full">
+                                    <label htmlFor="schemeOfferPrice" className={labelClass}>
+                                        Offer Price
+                                    </label>
+
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-secondary/70">
+                                            ₹
+                                        </span>
+
+                                        <input
+                                            type="number"
+                                            id="schemeOfferPrice"
+                                            value={schemeOfferPrice}
+                                            onChange={event =>
+                                                setSchemeOfferPrice(event.target.value)
+                                            }
+                                            placeholder="Enter offer price"
+                                            min="0"
+                                            step="0.01"
+                                            className={`${inputClass} !pl-8`}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Add Button */}
+                                <button
+                                    type="button"
+                                    onClick={addSelectedScheme}
+                                    disabled={
+                                        !selectedSchemeId ||
+                                        !schemeOfferPrice ||
+                                        Number(schemeOfferPrice) <= 0 ||
+                                        schemeLoading
+                                    }
+                                    className="flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-white transition hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    <Plus size={15} />
+                                    Add
+                                </button>
+                            </div>
+
+                            {/* Added Schemes */}
+                            {selectedSchemes.length > 0 && (
+                                <div className="space-y-1 pt-1">
+
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-xs font-semibold text-secondary/70">
+                                            Added Schemes
+                                        </p>
+
+                                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                                            {selectedSchemes.length} Added
+                                        </span>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        {selectedSchemes.map((selectedScheme, index) => {
+                                            const scheme = schemeOptions.find(
+                                                item =>
+                                                    item.schemeId === selectedScheme.schemeId
+                                            );
+
+                                            return (
+                                                <div
+                                                    key={selectedScheme.schemeId}
+                                                    className="flex items-center justify-between gap-3 rounded-lg border border-tertiary/40 bg-slate-50/60 px-3 py-2 transition hover:border-primary/30"
+                                                >
+                                                    {/* Scheme Name */}
+                                                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                                                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-[11px] font-bold text-primary">
+                                                            {index + 1}
+                                                        </span>
+
+                                                        <h4 className="truncate text-xs font-semibold text-gray-900">
+                                                            {scheme?.schemeName || 'Scheme'}
+                                                        </h4>
+                                                    </div>
+
+                                                    {/* Offer Price */}
+                                                    <div className="flex shrink-0 items-center gap-1.5">
+                                                        <span className="text-xs text-secondary/60">
+                                                            Offer:
+                                                        </span>
+
+                                                        <span className="text-sm font-semibold text-gray-800">
+                                                            ₹{Number(selectedScheme.offerPrice || 0).toFixed(2)}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Delete */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            removeSelectedScheme(
+                                                                selectedScheme.schemeId
+                                                            )
+                                                        }
+                                                        aria-label="Delete scheme"
+                                                        title="Delete scheme"
+                                                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-rose-500 transition hover:bg-rose-50"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Empty State */}
+                            {selectedSchemes.length === 0 && (
+                                <p className="py-2 text-center text-xs text-secondary/50">
+                                    No schemes added yet.
+                                </p>
+                            )}
                         </div>
                     </section>
 

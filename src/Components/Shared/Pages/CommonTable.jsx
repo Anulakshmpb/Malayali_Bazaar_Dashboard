@@ -12,6 +12,8 @@ import {
     ChevronsRight,
     Database,
     LoaderCircle,
+    Calendar,
+    FilterX,
 } from "lucide-react";
 
 export default function CommonTable({
@@ -37,6 +39,15 @@ export default function CommonTable({
     showRowNumbers = true,
     clientSide = false,
     className = "",
+    showDateFilter = false,
+    startDate = "",
+    endDate = "",
+    onStartDateChange,
+    onEndDateChange,
+    onDateChange,
+    onClearFilters,
+    dateKey = null,
+    filterContent = null,
 }) {
     const [searchTerm, setSearchTerm] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -62,6 +73,8 @@ export default function CommonTable({
             sortDirection,
             page,
             pageSize,
+            startDate,
+            endDate,
         });
     }, [
         debouncedSearch,
@@ -69,6 +82,8 @@ export default function CommonTable({
         sortDirection,
         page,
         pageSize,
+        startDate,
+        endDate,
         clientSide,
         onQueryChange,
     ]);
@@ -83,6 +98,18 @@ export default function CommonTable({
                 String(value ?? "").toLowerCase().includes(search)
             )
         );
+
+        if (dateKey && (startDate || endDate)) {
+            rows = rows.filter((row) => {
+                const raw = dateKey.split(".").reduce((curr, key) => curr?.[key], row);
+                if (!raw) return false;
+                const d = raw?.toDate ? raw.toDate() : (raw instanceof Date ? raw : new Date(raw));
+                if (Number.isNaN(d.getTime())) return false;
+                if (startDate && d < new Date(`${startDate}T00:00:00`)) return false;
+                if (endDate && d > new Date(`${endDate}T23:59:59`)) return false;
+                return true;
+            });
+        }
 
         if (sortBy) {
             rows = [...rows].sort((first, second) => {
@@ -118,6 +145,9 @@ export default function CommonTable({
         clientSide,
         debouncedSearch,
         sourceData,
+        dateKey,
+        startDate,
+        endDate,
         sortBy,
         sortDirection,
     ]);
@@ -168,6 +198,17 @@ export default function CommonTable({
     const clearSearch = () => {
         setSearchTerm("");
         setDebouncedSearch("");
+        setPage(1);
+    };
+
+    const handleClearFilters = () => {
+        if (typeof onClearFilters === "function") {
+            onClearFilters();
+        } else {
+            if (typeof onStartDateChange === "function") onStartDateChange("");
+            if (typeof onEndDateChange === "function") onEndDateChange("");
+            if (typeof onDateChange === "function") onDateChange({ startDate: "", endDate: "" });
+        }
         setPage(1);
     };
 
@@ -267,48 +308,121 @@ export default function CommonTable({
             </div>
 
 
-            {/* Search toolbar */}
-            {(showSearch || toolbarActions) && (
-                <div className="flex flex-col gap-3 border-b border-tertiary/30 bg-white px-5 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
-                    <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center md:max-w-xl">
-                        {showSearch && (
-                            <div className="group relative w-full">
-                                <Search
-                                    size={18}
-                                    className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-secondary/50 transition-colors group-focus-within:text-primary"
-                                />
+            {/* Search & Filters toolbar */}
+            {(showSearch || toolbarActions || showDateFilter || filterContent) && (
+                <div className="border-b border-tertiary/30 bg-white px-5 py-4 sm:px-6">
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                        <div className="flex flex-1 flex-wrap items-center gap-3">
+                            {showSearch && (
+                                <div className={`group relative w-full ${showDateFilter ? "sm:w-64 md:w-72" : "md:max-w-lg"} shrink-0`}>
+                                    <Search
+                                        size={18}
+                                        className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-secondary/50 transition-colors group-focus-within:text-primary"
+                                    />
 
-                                <input
-                                    type="text"
-                                    value={searchTerm}
-                                    onChange={(event) => {
-                                        setSearchTerm(event.target.value);
-                                        setPage(1);
-                                    }}
-                                    placeholder={searchPlaceholder}
-                                    aria-label="Search table records"
-                                    className="w-full rounded-xl border border-tertiary/50 bg-slate-50/70 py-2.5 pl-10 pr-10 text-sm text-gray-800 outline-none transition-all placeholder:text-gray-400 hover:border-tertiary focus:border-primary/60 focus:bg-white focus:ring-4 focus:ring-primary/10"
-                                />
+                                    <input
+                                        type="text"
+                                        value={searchTerm}
+                                        onChange={(event) => {
+                                            setSearchTerm(event.target.value);
+                                            setPage(1);
+                                        }}
+                                        placeholder={searchPlaceholder}
+                                        aria-label="Search table records"
+                                        className="w-full rounded-xl border border-tertiary/50 bg-slate-50/70 py-2.5 pl-10 pr-10 text-sm text-gray-800 outline-none transition-all placeholder:text-gray-400 hover:border-tertiary focus:border-primary/60 focus:bg-white focus:ring-4 focus:ring-primary/10"
+                                    />
 
-                                {searchTerm && (
-                                    <button
-                                        type="button"
-                                        onClick={clearSearch}
-                                        aria-label="Clear search"
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-secondary/60 transition hover:bg-tertiary/20 hover:text-gray-900"
-                                    >
-                                        <X size={15} />
-                                    </button>
-                                )}
+                                    {searchTerm && (
+                                        <button
+                                            type="button"
+                                            onClick={clearSearch}
+                                            aria-label="Clear search"
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-secondary/60 transition hover:bg-tertiary/20 hover:text-gray-900"
+                                        >
+                                            <X size={15} />
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            {showDateFilter && (
+                                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                                    {/* Start Date */}
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <Calendar size={18} className="text-gray-800" />
+                                        </div>
+                                        <input
+                                            type="date"
+                                            value={startDate}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                if (typeof onStartDateChange === "function") {
+                                                    onStartDateChange(val);
+                                                }
+                                                if (typeof onDateChange === "function") {
+                                                    onDateChange({ startDate: val, endDate });
+                                                }
+                                                setPage(1);
+                                            }}
+                                            aria-label="Start date"
+                                            className="block w-full sm:w-36 md:w-40 pl-10 pr-3 py-2.5 border border-tertiary/60 rounded-xl sm:text-sm text-gray-800 bg-slate-50 hover:bg-white focus:bg-white outline-none focus:outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary/40 transition-colors"
+                                        />
+                                    </div>
+
+                                    <span className="text-gray-800 font-medium px-1 text-sm">to</span>
+
+                                    {/* End Date */}
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <Calendar size={18} className="text-gray-800" />
+                                        </div>
+                                        <input
+                                            type="date"
+                                            value={endDate}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                if (typeof onEndDateChange === "function") {
+                                                    onEndDateChange(val);
+                                                }
+                                                if (typeof onDateChange === "function") {
+                                                    onDateChange({ startDate, endDate: val });
+                                                }
+                                                setPage(1);
+                                            }}
+                                            aria-label="End date"
+                                            className="block w-full sm:w-36 md:w-40 pl-10 pr-3 py-2.5 border border-tertiary/60 rounded-xl sm:text-sm text-gray-800 bg-slate-50 hover:bg-white focus:bg-white outline-none focus:outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary/40 transition-colors"
+                                        />
+                                    </div>
+
+                                    {/* Clear Filters */}
+                                    {(startDate || endDate || typeof onClearFilters === "function") && (
+                                        <button
+                                            type="button"
+                                            onClick={handleClearFilters}
+                                            className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-100 text-gray-800 border border-tertiary/50 rounded-xl text-sm font-medium hover:bg-slate-200 transition-colors shrink-0"
+                                        >
+                                            <FilterX size={16} />
+                                            Clear Filters
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            {filterContent && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {typeof filterContent === "function" ? filterContent() : filterContent}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Toolbar Actions */}
+                        {toolbarActions && (
+                            <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                {typeof toolbarActions === "function" ? toolbarActions() : toolbarActions}
                             </div>
                         )}
                     </div>
-
-                    {toolbarActions && (
-                        <div className="flex flex-wrap items-center gap-2">
-                            {typeof toolbarActions === "function" ? toolbarActions() : toolbarActions}
-                        </div>
-                    )}
                 </div>
             )}
 
