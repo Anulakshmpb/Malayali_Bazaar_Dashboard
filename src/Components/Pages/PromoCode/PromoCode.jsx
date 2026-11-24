@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { app, db } from "../../Config/Firebase";
+import CommonTable from "../../Shared/Pages/CommonTable";
 
 const functions = getFunctions(app, "europe-west1");
 const initialForm = {
@@ -101,7 +102,6 @@ export default function PromoCode() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPromo, setEditingPromo] = useState(null);
   const [form, setForm] = useState(initialForm);
-  const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -262,24 +262,6 @@ export default function PromoCode() {
   useEffect(() => {
     fetchPromos();
   }, [fetchPromos]);
-
-  const filteredPromos = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return promos;
-    return promos.filter((promo) =>
-      [
-        promo.name,
-        promo.code,
-        promo.desc,
-        promo.discountType,
-        promo.status ? "active" : "inactive",
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(query)
-    );
-  }, [promos, search]);
 
   const openAddModal = () => {
     setEditingPromo(null);
@@ -492,181 +474,264 @@ export default function PromoCode() {
   const activeCount = promos.filter((promo) => promo.status === true).length;
   const inactiveCount = promos.length - activeCount;
 
+  const stats = [
+    {
+      title: "Total Promo Codes",
+      value: promos.length,
+      icon: Tag,
+      color: "text-primary",
+      bg: "bg-primary/10",
+      border: "border-tertiary/40",
+    },
+    {
+      title: "Active",
+      value: activeCount,
+      icon: Eye,
+      color: "text-emerald-500",
+      bg: "bg-emerald-50",
+      border: "border-emerald-200",
+    },
+    {
+      title: "Inactive",
+      value: inactiveCount,
+      icon: EyeOff,
+      color: "text-slate-500",
+      bg: "bg-slate-100",
+      border: "border-slate-200",
+    },
+  ];
+
   return (
-    <div className="page-container min-h-screen bg-white pb-10">
+    <div className="min-h-screen bg-white pb-10 page-container">
       <div className="mx-auto max-w-7xl space-y-6">
-        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-          <div>
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="items-start">
             <h1 className="bg-gradient-to-br from-gray-900 to-secondary bg-clip-text text-3xl font-bold text-transparent">
               Promo Code Management
             </h1>
-            
+            <p className="mt-1 text-sm text-gray-500">
+              Create, manage and track promotional discounts.
+            </p>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={openAddModal}
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-secondary focus:outline-none"
+            >
+              <Plus size={18} />
+              Add Promo Code
+            </button>
             <button
               type="button"
               onClick={fetchPromos}
               disabled={loading}
-              className="flex items-center gap-2 rounded-xl border border-tertiary/60 bg-white px-4 py-2.5 text-sm font-bold text-gray-900 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-white border border-tertiary/60 px-4 py-2.5 text-sm font-bold text-gray-900 shadow-sm transition hover:bg-slate-50 focus:outline-none disabled:opacity-50"
             >
-              <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+              <RefreshCw
+                size={16}
+                className={`text-secondary ${loading ? "animate-spin" : ""}`}
+              />
               Refresh
-            </button>
-            <button
-              type="button"
-              onClick={openAddModal}
-              className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-secondary"
-            >
-              <Plus size={18} />
-              Add Promo Code
             </button>
           </div>
         </div>
 
         {error && !isModalOpen && (
-          <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <div
+            role="alert"
+            className="flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+          >
             <span>{error}</span>
-            <button type="button" onClick={() => setError("")} aria-label="Dismiss error">
+            <button
+              type="button"
+              onClick={() => setError("")}
+              aria-label="Dismiss error"
+            >
               <X size={16} />
             </button>
           </div>
         )}
         {notice && (
-          <div role="status" className="flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <div
+            role="status"
+            className="flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
+          >
             <span>{notice}</span>
-            <button type="button" onClick={() => setNotice("")} aria-label="Dismiss message">
+            <button
+              type="button"
+              onClick={() => setNotice("")}
+              aria-label="Dismiss message"
+            >
               <X size={16} />
             </button>
           </div>
         )}
 
+        {/* Stats */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl border border-tertiary/40 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-gray-500">Total Promo Codes</p>
-            <p className="mt-2 text-2xl font-bold text-gray-900">{promos.length}</p>
-          </div>
-          <div className="rounded-2xl border border-tertiary/40 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-gray-500">Active</p>
-            <p className="mt-2 text-2xl font-bold text-emerald-700">{activeCount}</p>
-          </div>
-          <div className="rounded-2xl border border-tertiary/40 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-gray-500">Inactive</p>
-            <p className="mt-2 text-2xl font-bold text-gray-700">{inactiveCount}</p>
-          </div>
+          {stats.map((stat, idx) => (
+            <div
+              key={idx}
+              className={`flex items-center gap-4 rounded-xl border ${stat.border} bg-white p-5 shadow-sm`}
+            >
+              <div
+                className={`flex h-12 w-12 items-center justify-center rounded-full ${stat.bg} ${stat.color}`}
+              >
+                <stat.icon size={24} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-gray-900">{stat.title}</p>
+                <p className={`text-2xl font-black mt-0.5 ${stat.color}`}>
+                  {stat.value}
+                </p>
+              </div>
+            </div>
+          ))}
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-tertiary/40 bg-white shadow-sm">
-          <div className="flex flex-col gap-3 border-b border-tertiary/30 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">Promo Codes</h2>
-            </div>
-            <div className="relative w-full sm:max-w-xs">
-              <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search promo codes..."
-                className="w-full rounded-lg border border-tertiary/60 bg-slate-50 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10"
-              />
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1050px] text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-gray-500">
-                <tr>
-                  <th className="px-5 py-4 font-bold">Promo Code</th>
-                  <th className="px-5 py-4 font-bold">Discount</th>
-                  <th className="px-5 py-4 font-bold">Minimum Order</th>
-                  <th className="px-5 py-4 font-bold">Validity</th>
-                  <th className="px-5 py-4 font-bold">Usage</th>
-                  <th className="px-5 py-4 font-bold">Status</th>
-                  <th className="px-5 py-4 text-right font-bold">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-tertiary/20">
-                {filteredPromos.map((promo) => {
-                  const id = getPromoId(promo);
-                  const isActive = promo.status === true;
-                  return (
-                    <tr key={id || promo.code} className="transition hover:bg-slate-50/70">
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                            <Tag size={18} />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-bold text-gray-900">{promo.code || "—"}</p>
-                            <p className="max-w-xs truncate text-xs text-gray-500">{promo.name || "—"}{promo.desc ? ` · ${promo.desc}` : ""}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 font-semibold text-gray-800">
-                        {promo.discountType === "percentage"
-                          ? `${promo.discountValue ?? 0}%`
-                          : `₹${Number(promo.discountValue || 0).toLocaleString("en-IN")}`}
-                      </td>
-                      <td className="px-5 py-4 text-gray-700">
-                        ₹{Number(promo.minimumOrderValue || 0).toLocaleString("en-IN")}
-                      </td>
-                      <td className="px-5 py-4 text-gray-600">
-                        <div className="flex items-center gap-2">
-                          <CalendarDays size={15} className="text-gray-400" />
-                          <span>{formatDate(promo.startDate)} – {formatDate(promo.expirationDate)}</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 text-gray-700">
-                        <span className="font-semibold">{Number(promo.currentUsage || 0)}</span>
-                        <span className="text-gray-400"> / {Number(promo.usageLimit || 0)}</span>
-                        <p className="mt-0.5 text-xs text-gray-500">
-                          {Number(promo.usageLeft ?? Math.max(Number(promo.usageLimit || 0) - Number(promo.currentUsage || 0), 0))} left
-                        </p>
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${isActive ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
-                          {isActive ? "Active" : "Inactive"}
-                        </span>
-                        <p className="mt-1 flex items-center gap-1 text-xs text-gray-400">
-                          {promo.visibility === false ? <EyeOff size={12} /> : <Eye size={12} />}
-                          {promo.visibility === false ? "Hidden" : "Visible"}
-                        </p>
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="flex justify-end gap-1">
-                          <button type="button" title="Edit promo code" onClick={() => openEditModal(promo)} className="rounded-lg p-2 text-gray-700 transition hover:bg-slate-100 hover:text-primary">
-                            <Edit size={16} />
-                          </button>
-                          <button
-                            type="button"
-                            title="Delete promo code"
-                            onClick={() => handleDelete(promo)}
-                            disabled={deletingId === id}
-                            className="rounded-lg p-2 text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
-                          >
-                            {deletingId === id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {!loading && filteredPromos.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-5 py-12 text-center text-sm text-gray-500">
-                      {search ? "No promo codes match your search." : "No promo codes found. Click Add Promo Code to create one."}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          {loading && (
-            <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500">
-              <Loader2 size={18} className="animate-spin" />
-              Loading promo codes...
-            </div>
-          )}
-        </div>
+        {/* CommonTable */}
+        <CommonTable
+          title="Promo Codes"
+          subtitle="All promo codes stored in your database."
+          columns={[
+            {
+              key: "code",
+              header: "Promo Code",
+              sortable: true,
+              render: (promo) => (
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <Tag size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-gray-900">{promo.code || "—"}</p>
+                    <p className="max-w-xs truncate text-xs text-gray-500">
+                      {promo.name || "—"}{promo.desc ? ` · ${promo.desc}` : ""}
+                    </p>
+                  </div>
+                </div>
+              ),
+            },
+            {
+              key: "discountValue",
+              header: "Discount",
+              sortable: true,
+              render: (promo) => (
+                <span className="font-semibold text-gray-800">
+                  {promo.discountType === "percentage"
+                    ? `${promo.discountValue ?? 0}%`
+                    : `₹${Number(promo.discountValue || 0).toLocaleString("en-IN")}`}
+                </span>
+              ),
+            },
+            {
+              key: "minimumOrderValue",
+              header: "Minimum Order",
+              sortable: true,
+              render: (promo) => (
+                <span className="text-gray-700">
+                  ₹{Number(promo.minimumOrderValue || 0).toLocaleString("en-IN")}
+                </span>
+              ),
+            },
+            {
+              key: "startDate",
+              header: "Validity",
+              sortable: true,
+              render: (promo) => (
+                <div className="flex items-center gap-2 text-gray-600">
+                  <CalendarDays size={15} className="text-gray-400" />
+                  <span>
+                    {formatDate(promo.startDate)} – {formatDate(promo.expirationDate)}
+                  </span>
+                </div>
+              ),
+            },
+            {
+              key: "currentUsage",
+              header: "Usage",
+              sortable: true,
+              render: (promo) => (
+                <div className="text-gray-700">
+                  <span className="font-semibold">{Number(promo.currentUsage || 0)}</span>
+                  <span className="text-gray-400"> / {Number(promo.usageLimit || 0)}</span>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    {Number(
+                      promo.usageLeft ??
+                        Math.max(
+                          Number(promo.usageLimit || 0) - Number(promo.currentUsage || 0),
+                          0
+                        )
+                    )}{" "}
+                    left
+                  </p>
+                </div>
+              ),
+            },
+            {
+              key: "status",
+              header: "Status",
+              sortable: true,
+              render: (promo) => {
+                const isActive = promo.status === true;
+                return (
+                  <div>
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${
+                        isActive
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {isActive ? "Active" : "Inactive"}
+                    </span>
+                    <p className="mt-1 flex items-center gap-1 text-xs text-gray-400">
+                      {promo.visibility === false ? <EyeOff size={12} /> : <Eye size={12} />}
+                      {promo.visibility === false ? "Hidden" : "Visible"}
+                    </p>
+                  </div>
+                );
+              },
+            },
+          ]}
+          data={promos}
+          total={promos.length}
+          loading={loading}
+          clientSide
+          showRowNumbers={false}
+          rowKey={(promo) => getPromoId(promo) || promo.code}
+          searchPlaceholder="Search promo codes..."
+          actions={(promo) => {
+            const id = getPromoId(promo);
+            return (
+              <div className="flex justify-end gap-1">
+                <button
+                  type="button"
+                  title="Edit promo code"
+                  onClick={() => openEditModal(promo)}
+                  className="rounded-lg p-2 text-gray-700 transition hover:bg-slate-100 hover:text-primary"
+                >
+                  <Edit size={16} />
+                </button>
+                <button
+                  type="button"
+                  title="Delete promo code"
+                  onClick={() => handleDelete(promo)}
+                  disabled={deletingId === id}
+                  className="rounded-lg p-2 text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+                >
+                  {deletingId === id ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={16} />
+                  )}
+                </button>
+              </div>
+            );
+          }}
+        />
       </div>
 
       {isModalOpen && (

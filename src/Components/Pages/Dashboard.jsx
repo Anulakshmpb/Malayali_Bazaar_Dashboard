@@ -263,9 +263,9 @@ export default function Dashboard() {
                         <h1 className="text-3xl font-bold bg-gradient-to-br from-gray-900 to-secondary text-transparent bg-clip-text">
                             Dashboard Overview
                         </h1>
-                        <p className="mt-1 text-xs text-secondary/70">
+                        {/* <p className="mt-1 text-xs text-secondary/70">
                             Real-time store performance, product sales, and financial summary
-                        </p>
+                        </p> */}
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
                         <button 
