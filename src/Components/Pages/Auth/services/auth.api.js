@@ -1,4 +1,4 @@
-import { doc, getDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, limit, query, where } from "firebase/firestore";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth, db } from "../../../Config/Firebase";
 
@@ -9,24 +9,40 @@ export const adminLogin = async (email, password) => {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
         const adminRef = doc(db, 'adminUsers', user.uid);
-        const adminSnap = await getDoc(adminRef);
-        // if (!adminSnap.exists()) {
-        //     await signOut(auth);
-        //     return {
-        //         success: false,
-        //         error: 'Access denied. Admin only.',
-        //     };
-        // }
-        
-        // const adminData = adminSnap.data();
-        // if (adminData.uid !== user.uid) {
-        //     await signOut(auth);
-        //     return {
-        //         success: false,
-        //         error: 'Account disabled. Contact admin.',
-        //     };
-        // }
-        
+        let adminSnap = await getDoc(adminRef);
+
+        if (!adminSnap.exists()) {
+            const fallbackQuery = query(
+                collection(db, 'adminUsers'),
+                where('uid', '==', user.uid),
+                limit(1)
+            );
+            const fallbackSnap = await getDocs(fallbackQuery);
+            if (!fallbackSnap.empty) {
+                adminSnap = fallbackSnap.docs[0];
+            }
+        }
+
+        if (!adminSnap.exists()) {
+            await signOut(auth);
+            return {
+                success: false,
+                error: 'Access denied. Authorized administrators only.',
+            };
+        }
+
+        const adminData = adminSnap.data() || {};
+        if (
+            adminData.status !== undefined &&
+            String(adminData.status).toLowerCase() !== 'active'
+        ) {
+            await signOut(auth);
+            return {
+                success: false,
+                error: 'Your admin account is disabled or removed. Please contact a Super Admin.',
+            };
+        }
+
         return {
             success: true,
             user: userCredential.user,

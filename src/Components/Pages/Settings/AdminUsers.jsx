@@ -21,6 +21,7 @@ import { getApp } from "firebase/app";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { db } from "../../Config/Firebase";
 import CommonTable from "../../Shared/Pages/CommonTable";
+import { useConfirm } from "../../Shared/ui/ConfirmDialog";
 
 const functions = getFunctions(getApp(), "europe-west1");
 const adminCallable = httpsCallable(functions, "manageAdmin");
@@ -58,6 +59,7 @@ function getErrorMessage(error) {
 }
 
 export default function AdminUsers() {
+  const confirm = useConfirm();
   const [admins, setAdmins] = useState([]);
   const [search, setSearch] = useState("");
   const [adminForm, setAdminForm] = useState(false);
@@ -349,9 +351,11 @@ export default function AdminUsers() {
   const handleDelete = async (admin) => {
     if (deletingId || saving) return;
 
-    const confirmed = window.confirm(
-      `Are you sure you want to remove ${admin.name || admin.email}? This will disable their Firebase Authentication account.`
-    );
+    const confirmed = await confirm({
+      title: "Remove Admin User",
+      message: `Are you sure you want to remove ${admin.name || admin.email}? This will disable their Firebase Authentication account.`,
+      confirmLabel: "Remove Admin",
+    });
 
     if (!confirmed) return;
 
@@ -688,7 +692,7 @@ export default function AdminUsers() {
                     type="tel"
                     value={form.mobile}
                     onChange={handleChange}
-                    placeholder="+919876543210"
+                    placeholder="+49 170 1234567"
                     autoComplete="tel"
                     className={inputClass}
                     required

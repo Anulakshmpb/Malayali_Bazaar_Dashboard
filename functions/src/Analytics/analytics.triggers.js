@@ -77,40 +77,46 @@ export const onOrderAnalyticsTrigger = onDocumentWritten(
         const afterPaid = Number(afterData.paidAmount ?? (afterIsPaid ? afterRevenue : 0));
 
         const deltaPaid = afterPaid - beforePaid;
-        const deltaReceivable = (afterRevenue - afterPaid) - (beforeRevenue - beforePaid);
+        const beforeUnpaid = Math.max(0, beforeRevenue - beforePaid);
+        const afterUnpaid = Math.max(0, afterRevenue - afterPaid);
+        const deltaReceivable = afterUnpaid - beforeUnpaid;
 
         if (deltaPaid !== 0 || deltaReceivable !== 0) {
-          const batch = db.batch();
-          const customerId = afterData.customerId || afterData.userId;
+          try {
+            const batch = db.batch();
+            const customerId = afterData.customerId || afterData.userId;
 
-          if (customerId) {
-            const ledgerRef = db.collection("user_ledgers").doc(customerId);
-            batch.set(ledgerRef, {
-              paidAmount: FieldValue.increment(deltaPaid),
-              payableAmount: FieldValue.increment(deltaReceivable),
+            if (customerId) {
+              const ledgerRef = db.collection("user_ledgers").doc(customerId);
+              batch.set(ledgerRef, {
+                paidAmount: FieldValue.increment(deltaPaid),
+                payableAmount: FieldValue.increment(deltaReceivable),
+                updatedAt: FieldValue.serverTimestamp(),
+              }, {merge: true});
+            }
+
+            const overviewRef = db.collection("analytics").doc("overview");
+            const overviewUpdate = {
+              totalPaid: FieldValue.increment(deltaPaid),
+              totalReceivables: FieldValue.increment(deltaReceivable),
               updatedAt: FieldValue.serverTimestamp(),
-            }, {merge: true});
+            };
+
+            if (!beforeIsPaid && afterIsPaid) {
+              overviewUpdate.paidOrders = FieldValue.increment(1);
+              overviewUpdate.pendingPaymentOrders = FieldValue.increment(-1);
+            } else if (beforeIsPaid && !afterIsPaid) {
+              overviewUpdate.paidOrders = FieldValue.increment(-1);
+              overviewUpdate.pendingPaymentOrders = FieldValue.increment(1);
+            }
+
+            batch.set(overviewRef, overviewUpdate, {merge: true});
+
+            await batch.commit();
+            logInfo(`Delivered order payment updated for order ${orderDocId}: deltaPaid=${deltaPaid}`);
+          } catch (error) {
+            logError(`Failed to update delivered order payment for ${orderDocId}:`, {error: error.message});
           }
-
-          const overviewRef = db.collection("analytics").doc("overview");
-          const overviewUpdate = {
-            totalPaid: FieldValue.increment(deltaPaid),
-            totalReceivables: FieldValue.increment(deltaReceivable),
-            updatedAt: FieldValue.serverTimestamp(),
-          };
-
-          if (!beforeIsPaid && afterIsPaid) {
-            overviewUpdate.paidOrders = FieldValue.increment(1);
-            overviewUpdate.pendingPaymentOrders = FieldValue.increment(-1);
-          } else if (beforeIsPaid && !afterIsPaid) {
-            overviewUpdate.paidOrders = FieldValue.increment(-1);
-            overviewUpdate.pendingPaymentOrders = FieldValue.increment(1);
-          }
-
-          batch.set(overviewRef, overviewUpdate, {merge: true});
-
-          await batch.commit();
-          logInfo(`Delivered order payment updated for order ${orderDocId}: deltaPaid=${deltaPaid}`);
         }
         return;
       }
@@ -335,6 +341,8 @@ export const onProductAnalyticsTrigger = onDocumentWritten(
         // Case 3: Product updated (stock change)
         const wasLow = isLowStock(beforeData);
         const nowLow = isLowStock(afterData);
+
+        if (wasLow === nowLow) return;
 
         if (!wasLow && nowLow) {
           batch.set(overviewRef, {

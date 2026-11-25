@@ -281,11 +281,6 @@ const useFcmSubscription = (
                 unsubscribeMessageRef.current = onMessage(
                     messaging,
                     (payload) => {
-                        console.log(
-                            "[FCM] Foreground message:",
-                            payload
-                        );
-
                         const data = payload.data || {};
 
                         const message = {
@@ -354,11 +349,6 @@ const useFcmSubscription = (
             ) {
                 return;
             }
-
-            console.log(
-                "[FCM] Notification clicked:",
-                message.data
-            );
 
             setServiceWorkerMessage({
                 ...message.data,

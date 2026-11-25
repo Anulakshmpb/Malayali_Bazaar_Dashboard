@@ -15,6 +15,7 @@ import {
 import {
     collection,
     getDocs,
+    limit,
     query,
     where
 } from "firebase/firestore";
@@ -22,8 +23,8 @@ import {
     getFunctions,
     httpsCallable
 } from "firebase/functions";
-import { toast } from "sonner";
 import { app, db } from "../../Config/Firebase";
+import { useToast } from "../../Shared/hooks/ToastContext";
 
 const functions = getFunctions(app, "europe-west1");
 
@@ -103,6 +104,7 @@ const replaceVariables = (content, variables) => {
 };
 
 export default function SendNotification() {
+    const { showToast } = useToast();
 
     const [formData, setFormData] = useState(DEFAULT_FORM);
 
@@ -149,11 +151,12 @@ export default function SendNotification() {
                         getDocs(
                             query(
                                 collection(db, "notification_templates"),
-                                where("status", "==", "Active")
+                                where("status", "==", "Active"),
+                                limit(100)
                             )
                         ),
 
-                        getDocs(collection(db, "users"))
+                        getDocs(query(collection(db, "users"), limit(300)))
 
                     ]);
 
@@ -184,8 +187,9 @@ export default function SendNotification() {
 
                 console.error("Notification data error:", error);
 
-                toast.error(
-                    "Unable to load customers or notification templates."
+                showToast(
+                    "Unable to load customers or notification templates.",
+                    "error"
                 );
 
             } finally {
@@ -197,7 +201,7 @@ export default function SendNotification() {
 
         fetchData();
 
-    }, []);
+    }, [showToast]);
 
     // --------------------------------------------------
     // CUSTOMER AUTOCOMPLETE
@@ -347,7 +351,7 @@ export default function SendNotification() {
         event.preventDefault();
 
         if (formData.targetType === "token" && !selectedCustomer) {
-            toast.error("Please select a customer.");
+            showToast("Please select a customer.", "error");
             return;
         }
 
@@ -355,27 +359,29 @@ export default function SendNotification() {
             formData.targetType === "topic" &&
             !formData.audience
         ) {
-            toast.error("Please select a notification audience.");
+            showToast("Please select a notification audience.", "error");
             return;
         }
 
         if (!selectedTemplate) {
-            toast.error("Please select a notification template.");
+            showToast("Please select a notification template.", "error");
             return;
         }
 
         if (missingVariables.length > 0) {
-            toast.error(
-                `Fill in these template variables: ${missingVariables.join(", ")}`
+            showToast(
+                `Fill in these template variables: ${missingVariables.join(", ")}`,
+                "error"
             );
             return;
         }
 
+        const targetUrl = typeof formData.url === "string" ? formData.url.trim() : "";
         if (
-            !formData.url.startsWith("/") ||
-            formData.url.startsWith("//")
+            targetUrl &&
+            (!targetUrl.startsWith("/") || targetUrl.startsWith("//"))
         ) {
-            toast.error("Enter a valid internal navigation URL.");
+            showToast("Enter a valid internal navigation URL.", "error");
             return;
         }
 
@@ -421,28 +427,32 @@ export default function SendNotification() {
 
                 if (delivery.totalTokens === 0) {
 
-                    toast.warning(
-                        "Notification saved, but this customer has no registered FCM tokens."
+                    showToast(
+                        "Notification saved, but this customer has no registered FCM tokens.",
+                        "info"
                     );
 
                 } else {
 
-                    toast.success(
-                        `Notification processed. ${delivery.successCount} device(s) received the FCM request.`
+                    showToast(
+                        `Notification processed. ${delivery.successCount} device(s) received the FCM request.`,
+                        "success"
                     );
 
                 }
 
             } else if (formData.audience === "under_5_km") {
 
-                toast.success(
-                    `Nearby notification processed for ${delivery.recipientCount || 0} customer(s).`
+                showToast(
+                    `Nearby notification processed for ${result.recipientCount ?? delivery.recipientCount ?? 0} customer(s).`,
+                    "success"
                 );
 
             } else {
 
-                toast.success(
-                    "Notification broadcast accepted by Firebase Cloud Messaging."
+                showToast(
+                    "Notification broadcast accepted by Firebase Cloud Messaging.",
+                    "success"
                 );
 
             }
@@ -456,8 +466,9 @@ export default function SendNotification() {
 
             console.error("Send notification error:", error);
 
-            toast.error(
-                error?.message || "Unable to send notification."
+            showToast(
+                error?.message || "Unable to send notification.",
+                "error"
             );
 
         } finally {
@@ -559,11 +570,10 @@ export default function SendNotification() {
                                     `}
                                 >
 
-                                    <div className={`rounded-xl p-3 ${
-                                        formData.targetType === "token"
-                                            ? "bg-primary text-white"
-                                            : "bg-slate-100 text-secondary"
-                                    }`}>
+                                    <div className={`rounded-xl p-3 ${formData.targetType === "token"
+                                        ? "bg-primary text-white"
+                                        : "bg-slate-100 text-secondary"
+                                        }`}>
                                         <UserRound size={21} />
                                     </div>
 
@@ -598,11 +608,10 @@ export default function SendNotification() {
                                     `}
                                 >
 
-                                    <div className={`rounded-xl p-3 ${
-                                        formData.targetType === "topic"
-                                            ? "bg-primary text-white"
-                                            : "bg-slate-100 text-secondary"
-                                    }`}>
+                                    <div className={`rounded-xl p-3 ${formData.targetType === "topic"
+                                        ? "bg-primary text-white"
+                                        : "bg-slate-100 text-secondary"
+                                        }`}>
                                         <Users size={21} />
                                     </div>
 
@@ -781,11 +790,10 @@ export default function SendNotification() {
                                                     `}
                                                 >
 
-                                                    <div className={`rounded-lg p-2 ${
-                                                        active
-                                                            ? "bg-primary text-white"
-                                                            : "bg-slate-100 text-secondary"
-                                                    }`}>
+                                                    <div className={`rounded-lg p-2 ${active
+                                                        ? "bg-primary text-white"
+                                                        : "bg-slate-100 text-secondary"
+                                                        }`}>
                                                         <Icon size={19} />
                                                     </div>
 

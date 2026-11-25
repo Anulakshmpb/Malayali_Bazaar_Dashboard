@@ -6,11 +6,13 @@ import {
     PackageX,
     PackageCheck,
 } from 'lucide-react';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, limit, onSnapshot, query } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, db } from '../../Config/Firebase';
 import { useToast } from '../../Shared/hooks/ToastContext';
 import CommonTable from '../../Shared/Pages/CommonTable';
+import { downloadCsv } from '../../Shared/utils/csv';
+import { formatCurrency } from '../../Shared/utils/formatters';
 
 const functions = getFunctions(app, 'europe-west1');
 const manageProductCallable = httpsCallable(functions, 'manageProduct');
@@ -27,11 +29,12 @@ export default function StockManagement() {
     const [loading, setLoading] = useState(true);
     const [activeFilter, setActiveFilter] = useState('All');
     const [updatingProductId, setUpdatingProductId] = useState(null);
+    const [stockInputs, setStockInputs] = useState({});
     const [refreshKey, setRefreshKey] = useState(0);
 
     useEffect(() => {
         const unsubscribe = onSnapshot(
-            collection(db, 'products'),
+            query(collection(db, 'products'), limit(300)),
             (snapshot) => {
                 const productList = snapshot.docs.map(document => ({
                     id: document.id,
@@ -164,7 +167,7 @@ export default function StockManagement() {
                     ))}
                 </div>
 
-                {/* Filters */}
+                {/* Filters & Export */}
                 <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 rounded-xl border border-tertiary/40 bg-white p-4 shadow-sm">
                     <div className="flex flex-wrap items-center gap-2">
                         {['All', 'Low Stock', 'Out of Stock', 'In Stock'].map(tab => (
@@ -182,6 +185,39 @@ export default function StockManagement() {
                                 {tab}
                             </button>
                         ))}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                downloadCsv({
+                                    filename: 'stock-inventory.csv',
+                                    headers: ['Product', 'SKU', 'Category', 'Price (€)', 'Stock', 'Status'],
+                                    rows: filteredProducts.map((p) => [
+                                        p.productName || '',
+                                        p.productSKU || '',
+                                        p.category || '',
+                                        Number(p.offerPrice || p.mrp || 0).toFixed(2),
+                                        Number(p.stock ?? 0),
+                                        getStockStatus(p.stock),
+                                    ]),
+                                });
+                                showToast(`Exported ${filteredProducts.length} stock records to CSV.`, 'success');
+                            }}
+                            className="inline-flex items-center gap-2 rounded-lg border border-tertiary/50 bg-slate-50 px-3.5 py-2 text-xs font-bold text-gray-800 transition hover:bg-slate-100"
+                        >
+                            <Download size={14} className="text-primary" />
+                            Export CSV
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setRefreshKey((prev) => prev + 1)}
+                            className="inline-flex items-center gap-2 rounded-lg border border-tertiary/50 bg-white px-3.5 py-2 text-xs font-bold text-gray-800 transition hover:bg-slate-50"
+                        >
+                            <RefreshCw size={14} className="text-secondary" />
+                            Refresh
+                        </button>
                     </div>
                 </div>
 
@@ -214,7 +250,7 @@ export default function StockManagement() {
                             key: "mrp",
                             header: "Price",
                             sortable: true,
-                            render: (product) => `₹${Number(product.offerPrice || product.mrp || 0).toFixed(2)}`,
+                            render: (product) => formatCurrency(product.offerPrice || product.mrp || 0),
                         },
                         {
                             key: "stock",
@@ -247,34 +283,43 @@ export default function StockManagement() {
                     showRowNumbers={false}
                     rowKey="id"
                     searchPlaceholder="Search product, SKU, or category..."
-                    actions={(product) => (
-                        <div className="inline-flex items-center justify-end gap-2">
-                            <input
-                                type="number"
-                                min="0"
-                                step="1"
-                                id={`stock-input-${product.id}`}
-                                defaultValue={product.stock}
-                                key={`input-${product.id}-${product.stock}`}
-                                aria-label={`Set stock for ${product.productName || 'product'}`}
-                                disabled={updatingProductId === product.id}
-                                className="w-20 rounded-md border border-tertiary/60 bg-white px-2 py-1 text-center text-xs font-bold text-gray-900 outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20 shadow-inner"
-                            />
-                            <button
-                                type="button"
-                                disabled={updatingProductId === product.id}
-                                onClick={() => {
-                                    const input = document.getElementById(`stock-input-${product.id}`);
-                                    if (input && input.value !== "") {
-                                        handleUpdateStock(product, Number(input.value));
+                    actions={(product) => {
+                        const inputValue =
+                            stockInputs[product.id] !== undefined
+                                ? stockInputs[product.id]
+                                : String(product.stock ?? 0);
+                        return (
+                            <div className="inline-flex items-center justify-end gap-2">
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    value={inputValue}
+                                    onChange={(e) =>
+                                        setStockInputs((prev) => ({
+                                            ...prev,
+                                            [product.id]: e.target.value,
+                                        }))
                                     }
-                                }}
-                                className="rounded-md bg-gray-900 px-3 py-1 text-xs font-bold text-white shadow-sm transition hover:bg-primary active:scale-95 focus:outline-none focus:ring-2 focus:ring-gray-900/40 disabled:cursor-wait disabled:opacity-50"
-                            >
-                                {updatingProductId === product.id ? 'Saving' : 'Set'}
-                            </button>
-                        </div>
-                    )}
+                                    aria-label={`Set stock for ${product.productName || 'product'}`}
+                                    disabled={updatingProductId === product.id}
+                                    className="w-20 rounded-md border border-tertiary/60 bg-white px-2 py-1 text-center text-xs font-bold text-gray-900 outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/20 shadow-inner"
+                                />
+                                <button
+                                    type="button"
+                                    disabled={updatingProductId === product.id}
+                                    onClick={() => {
+                                        if (inputValue !== "") {
+                                            handleUpdateStock(product, Number(inputValue));
+                                        }
+                                    }}
+                                    className="rounded-md bg-gray-900 px-3 py-1 text-xs font-bold text-white shadow-sm transition hover:bg-primary active:scale-95 focus:outline-none focus:ring-2 focus:ring-gray-900/40 disabled:cursor-wait disabled:opacity-50"
+                                >
+                                    {updatingProductId === product.id ? 'Saving' : 'Set'}
+                                </button>
+                            </div>
+                        );
+                    }}
                 />
 
             </div>

@@ -3,7 +3,7 @@ import {FieldValue} from "firebase-admin/firestore";
 import Joi from "joi";
 import {callableWrapper} from "../../shared/callable.wrapper.js";
 import {db} from "../../shared/config.js";
-import {requireAuth, getAction, getFields, fail, validate} from "../../shared/utils.js";
+import {requireActiveAdmin, getAction, getFields, fail, validate} from "../../shared/utils.js";
 import {logInfo, logError} from "../../shared/logger.js";
 
 const deliveryPlaces = db.collection("delivery_places");
@@ -62,7 +62,7 @@ const normalizePlaceData = (docSnap) => {
  */
 export const manageDeliveryPlace = callableWrapper(async (req) => {
   try {
-    requireAuth(req);
+    await requireActiveAdmin(req);
     const action = getAction(req);
     const fields = getFields(req);
 

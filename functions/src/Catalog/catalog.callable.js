@@ -3,6 +3,7 @@ import {FieldValue} from "firebase-admin/firestore";
 import Joi from "joi";
 import {callableWrapper} from "../../shared/callable.wrapper.js";
 import {db} from "../../shared/config.js";
+import {requireActiveAdmin, fail} from "../../shared/utils.js";
 
 const categories = db.collection("category");
 const subCategories = db.collection("subCategory");
@@ -30,24 +31,9 @@ const validate = (schema, data) => {
   return {success: true, data: value};
 };
 
-const requireAuth = (req) => {
-  if (!req.auth) {
-    throw new Error("User is not authenticated");
-  }
-};
-
 const getFields = (req) => req.data?.fields || req.data || {};
 
 const getAction = (req) => req.data?.action;
-
-const fail = (error, fallback) => {
-  console.error(fallback, error);
-
-  return {
-    success: false,
-    message: error.message || fallback,
-  };
-};
 
 const commonNameSchema = Joi.string().trim().min(1).max(150);
 
@@ -68,7 +54,7 @@ const categorySchema = Joi.object({
 
 export const manageCategory = callableWrapper(async (req) => {
   try {
-    requireAuth(req);
+    await requireActiveAdmin(req);
     const action = getAction(req);
     const fields = getFields(req);
     if (action === "list") {
@@ -200,7 +186,7 @@ const subCategorySchema = Joi.object({
 
 export const manageSubCategory = callableWrapper(async (req) => {
   try {
-    requireAuth(req);
+    await requireActiveAdmin(req);
 
     const action = getAction(req);
     const fields = getFields(req);
@@ -366,7 +352,7 @@ const brandSchema = Joi.object({
 
 export const manageBrand = callableWrapper(async (req) => {
   try {
-    requireAuth(req);
+    await requireActiveAdmin(req);
 
     const action = getAction(req);
     const fields = getFields(req);
@@ -459,7 +445,7 @@ const productTypeSchema = Joi.object({
 
 export const manageProductType = callableWrapper(async (req) => {
   try {
-    requireAuth(req);
+    await requireActiveAdmin(req);
     const action = getAction(req);
     const fields = getFields(req);
 
@@ -629,7 +615,7 @@ const bannerSchema = Joi.object({
 
 export const manageBanner = callableWrapper(async (req) => {
   try {
-    requireAuth(req);
+    await requireActiveAdmin(req);
 
     const action = getAction(req);
     const fields = getFields(req);
@@ -802,7 +788,7 @@ const promocodeSchema = Joi.object({
 
 export const managePromocode = callableWrapper(async (req) => {
   try {
-    requireAuth(req);
+    await requireActiveAdmin(req);
     const action = getAction(req);
     const fields = getFields(req);
 
@@ -1050,7 +1036,7 @@ const sectionSchema = Joi.object({
 
 export const manageSection = callableWrapper(async (req) => {
   try {
-    requireAuth(req);
+    await requireActiveAdmin(req);
 
     const action = getAction(req);
     const fields = getFields(req);
@@ -1071,6 +1057,48 @@ export const manageSection = callableWrapper(async (req) => {
           id: doc.id,
           ...doc.data(),
         })),
+      };
+    }
+
+    // =====================================================
+    // REORDER SECTIONS (BATCH)
+    // =====================================================
+    if (action === "reorder") {
+      let rawItems = [];
+      if (Array.isArray(fields.orders)) {
+        rawItems = fields.orders;
+      } else if (Array.isArray(fields.sections)) {
+        rawItems = fields.sections;
+      }
+
+      if (rawItems.length === 0) {
+        return {
+          success: false,
+          message: "orders array is required for reordering sections.",
+        };
+      }
+
+      const batch = db.batch();
+      for (const item of rawItems) {
+        const targetId = String(item?.id || item?.sectionId || "").trim();
+        const nextOrder = Number(item?.order);
+        if (!targetId || !Number.isInteger(nextOrder) || nextOrder < 0) {
+          return {
+            success: false,
+            message:
+              "Each reorder entry must include valid id and order.",
+          };
+        }
+        batch.update(sections.doc(targetId), {
+          order: nextOrder,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
+      return {
+        success: true,
+        message: "Section order updated successfully.",
       };
     }
 
@@ -1240,7 +1268,7 @@ const deleteSchemeSchema = Joi.object({
 
 export const manageScheme = callableWrapper(async (req) => {
   try {
-    requireAuth(req);
+    await requireActiveAdmin(req);
 
     const action = getAction(req);
     const fields = getFields(req);
@@ -1282,7 +1310,7 @@ export const manageScheme = callableWrapper(async (req) => {
           schemeId: schemeRef.id,
           schemeName,
           order: nextOrder,
-          createAt: FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
         transaction.set(schemeCounter, {

@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { collection, limit, onSnapshot, query } from "firebase/firestore";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -17,8 +18,12 @@ import {
   UserCheck,
   Sliders,
   PlusCircle,
-  Boxes
+  Boxes,
+  Tag,
+  Award,
+  Gift,
 } from "lucide-react";
+import { db } from "../Config/Firebase";
 import { useUser } from "./hooks/UserContext";
 import { FaArrowLeft } from "react-icons/fa";
 
@@ -56,6 +61,26 @@ const MENU_ITEMS = [
             name: "Add Products",
             path: "/products/add",
             icon: PlusCircle,
+          },
+          {
+            name: "Stock Management",
+            path: "/products/stock",
+            icon: Layers,
+          },
+          {
+            name: "Categories",
+            path: "/products/category",
+            icon: Tag,
+          },
+          {
+            name: "Brands",
+            path: "/products/brand",
+            icon: Award,
+          },
+          {
+            name: "Schemes",
+            path: "/product/scheme",
+            icon: Gift,
           },
         ],
       },
@@ -201,6 +226,26 @@ const TOP_NAV_ITEMS = [
         path: "/products/add",
         icon: PlusCircle,
       },
+      {
+        name: "Stock Management",
+        path: "/products/stock",
+        icon: Layers,
+      },
+      {
+        name: "Categories",
+        path: "/products/category",
+        icon: Tag,
+      },
+      {
+        name: "Brands",
+        path: "/products/brand",
+        icon: Award,
+      },
+      {
+        name: "Schemes",
+        path: "/product/scheme",
+        icon: Gift,
+      },
     ],
   },
   {
@@ -227,6 +272,61 @@ function AppBar({ children }) {
 
   const [expandedMenus, setExpandedMenus] = useState({});
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [openTopDropdown, setOpenTopDropdown] = useState(null);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const topNavRef = useRef(null);
+  const profileRef = useRef(null);
+
+  useEffect(() => {
+    setOpenTopDropdown(null);
+    setProfileMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (topNavRef.current && !topNavRef.current.contains(event.target)) {
+        setOpenTopDropdown(null);
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setProfileMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setOpenTopDropdown(null);
+        setProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!adminUser) {
+      setUnreadCount(0);
+      return undefined;
+    }
+    const q = query(collection(db, "admin_notification"), limit(25));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const count = snapshot.docs.reduce((acc, docSnap) => {
+          const data = docSnap.data() || {};
+          const isUnread = data.status === "Unread" || data.read === false;
+          return acc + (isUnread ? 1 : 0);
+        }, 0);
+        setUnreadCount(count);
+      },
+      () => setUnreadCount(0)
+    );
+    return () => unsubscribe();
+  }, [adminUser]);
 
 
   const handleBack = () => {
@@ -359,15 +459,15 @@ function AppBar({ children }) {
             {/* Logo */}
             <div className="flex flex-shrink-0 items-center">
               <NavLink
-                to="/"
-                className="flex items-center gap-2"
+                to="/dashboard"
+                className="flex items-center gap-2.5"
               >
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary font-bold text-white">
-                  {adminUser?.name ? adminUser.name.charAt(0).toUpperCase() : "A"}
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-xs font-extrabold tracking-tight text-white shadow-sm">
+                  MB
                 </div>
 
-                <span className="hidden font-jakarta text-[19px] font-bold text-gray-900 sm:block">
-                  {adminUser?.name || "Admin Panel"}
+                <span className="hidden truncate font-jakarta text-[17px] font-bold tracking-tight text-gray-900 sm:block">
+                  Malayali Bazaar
                 </span>
               </NavLink>
             </div>
@@ -397,7 +497,10 @@ function AppBar({ children }) {
           {/* =================================================
               TOP NAVIGATION
           ================================================== */}
-          <nav className={`hidden flex-1 items-center gap-1 lg:flex transition-all duration-300 ease-in-out ${sidebarOpen ? "ms-5 lg:ms-8" : "ms-5"}`}>
+          <nav
+            ref={topNavRef}
+            className={`hidden flex-1 items-center gap-1 lg:flex transition-all duration-300 ease-in-out ${sidebarOpen ? "ms-5 lg:ms-8" : "ms-5"}`}
+          >
             <button
               type="button"
               onClick={handleBack}
@@ -418,6 +521,7 @@ function AppBar({ children }) {
                 item.subItems && item.subItems.length > 0;
               const active = isParentActive(item);
               if (hasSubItems) {
+                const dropdownOpen = openTopDropdown === item.name;
                 return (
                   <div
                     key={item.name}
@@ -425,8 +529,16 @@ function AppBar({ children }) {
                   >
 
                     {/* Parent */}
-                    <div
-                      className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 font-inter text-[16px] font-semibold transition-all duration-200 ${active
+                    <button
+                      type="button"
+                      aria-expanded={dropdownOpen}
+                      aria-haspopup="true"
+                      onClick={() =>
+                        setOpenTopDropdown((prev) =>
+                          prev === item.name ? null : item.name
+                        )
+                      }
+                      className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 font-inter text-[15px] font-semibold transition-all duration-200 ${active || dropdownOpen
                         ? "bg-tertiary/20 text-gray-900"
                         : "text-secondary hover:bg-tertiary/10 hover:text-gray-900"
                         }`}
@@ -435,7 +547,9 @@ function AppBar({ children }) {
                       <span>{item.name}</span>
 
                       <svg
-                        className="h-4 w-4 transition-transform duration-200 group-hover:rotate-180"
+                        className={`h-4 w-4 transition-transform duration-200 ${
+                          dropdownOpen ? "rotate-180" : "group-hover:rotate-180"
+                        }`}
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -447,13 +561,17 @@ function AppBar({ children }) {
                           d="M19 9l-7 7-7-7"
                         />
                       </svg>
-                    </div>
+                    </button>
 
                     <div className="absolute left-0 top-full h-2 w-full" />
 
                     {/* Dropdown */}
                     <div
-                      className="invisible absolute left-0 top-[calc(100%+8px)] z-50 w-56 translate-y-1 overflow-hidden rounded-xl bg-white p-1.5 opacity-0 shadow-xl transition-all duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100"
+                      className={`absolute left-0 top-[calc(100%+8px)] z-50 w-56 overflow-hidden rounded-xl border border-slate-100 bg-white p-1.5 shadow-xl transition-all duration-200 ${
+                        dropdownOpen
+                          ? "visible translate-y-0 opacity-100"
+                          : "invisible translate-y-1 opacity-0 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100"
+                      }`}
                     >
                       {item.subItems.map((subItem) => (
                         <NavLink
@@ -515,7 +633,8 @@ function AppBar({ children }) {
             <button
               type="button"
               onClick={() => navigate('/notification')}
-              title="Notification"
+              title={unreadCount > 0 ? `${unreadCount} unread notifications` : "Notifications"}
+              aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : "Notifications"}
               className="relative flex h-10 w-10 items-center justify-center rounded-lg text-secondary transition hover:bg-tertiary/10 hover:text-gray-900"
             >
               <svg
@@ -532,15 +651,25 @@ function AppBar({ children }) {
                 />
               </svg>
 
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500" />
+              {unreadCount > 0 && (
+                <span className="absolute right-1 top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
             </button>
 
             {/* =================================================
               PROFILE
             ================================================== */}
-            <div className="group relative">
+            <div ref={profileRef} className="group relative">
 
-              <div className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 transition hover:bg-tertiary/10">
+              <button
+                type="button"
+                aria-expanded={profileMenuOpen}
+                aria-haspopup="true"
+                onClick={() => setProfileMenuOpen((prev) => !prev)}
+                className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 transition hover:bg-tertiary/10"
+              >
 
                 {/* Avatar */}
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-tertiary/30 text-sm font-semibold text-gray-900">
@@ -560,7 +689,9 @@ function AppBar({ children }) {
 
                 {/* Arrow */}
                 <svg
-                  className="h-4 w-4 text-tertiary transition-transform duration-200 group-hover:rotate-180"
+                  className={`h-4 w-4 text-tertiary transition-transform duration-200 ${
+                    profileMenuOpen ? "rotate-180" : "group-hover:rotate-180"
+                  }`}
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -572,14 +703,18 @@ function AppBar({ children }) {
                     d="M19 9l-7 7-7-7"
                   />
                 </svg>
-              </div>
+              </button>
 
               {/* Hover bridge */}
               <div className="absolute right-0 top-full h-2 w-56" />
 
               {/* Profile dropdown */}
               <div
-                className="invisible absolute right-0 top-[calc(100%+8px)] z-50 w-56 translate-y-1 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 opacity-0 shadow-xl transition-all duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100"
+                className={`absolute right-0 top-[calc(100%+8px)] z-50 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl transition-all duration-200 ${
+                  profileMenuOpen
+                    ? "visible translate-y-0 opacity-100"
+                    : "invisible translate-y-1 opacity-0 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100"
+                }`}
               >
                 {/* <NavLink
                   to="/profile"
@@ -675,16 +810,16 @@ function AppBar({ children }) {
         <div className="flex h-16 items-center justify-between px-4">
 
           <NavLink
-            to="/"
+            to="/dashboard"
             onClick={closeSidebar}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2.5"
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary font-bold text-white">
-              A
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-xs font-extrabold tracking-tight text-white shadow-sm">
+              MB
             </div>
 
-            <span className="font-jakarta text-[19px] font-bold text-gray-900">
-              Admin Panel
+            <span className="font-jakarta text-[17px] font-bold tracking-tight text-gray-900">
+              Malayali Bazaar
             </span>
           </NavLink>
 

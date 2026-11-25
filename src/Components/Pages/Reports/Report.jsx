@@ -13,19 +13,22 @@ import {
     FaPercentage,
     FaRedoAlt,
 } from "react-icons/fa";
-import { 
-    doc, 
-    collection, 
-    onSnapshot 
+import {
+    doc,
+    collection,
+    limit,
+    onSnapshot,
+    orderBy,
+    query,
+    Timestamp,
+    where
 } from "firebase/firestore";
 import { db } from "../../Config/Firebase";
+import { useToast } from "../../Shared/hooks/ToastContext";
+import { downloadCsv } from "../../Shared/utils/csv";
+import { formatCurrency, formatNumber } from "../../Shared/utils/formatters";
 
-const currency = (value) =>
-    new Intl.NumberFormat("en-IN", {
-        style: "currency",
-        currency: "INR",
-        maximumFractionDigits: 2,
-    }).format(Number(value || 0));
+const currency = (value) => formatCurrency(value);
 
 const dateLabel = (value) => {
     if (!value) return "Not selected";
@@ -34,7 +37,7 @@ const dateLabel = (value) => {
 
     if (Number.isNaN(date.getTime())) return value;
 
-    return date.toLocaleDateString("en-IN", {
+    return date.toLocaleDateString("en-GB", {
         day: "2-digit",
         month: "short",
         year: "numeric",
@@ -48,32 +51,6 @@ const toInputDate = (date) => {
 
     return `${year}-${month}-${day}`;
 };
-
-function downloadCsv(rows, filename = "financial-report.csv") {
-    const csv = rows
-        .map((row) =>
-            row
-                .map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`)
-                .join(",")
-        )
-        .join("\r\n");
-
-    const blob = new Blob(["\uFEFF" + csv], {
-        type: "text/csv;charset=utf-8;",
-    });
-
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-
-    anchor.href = url;
-    anchor.download = filename;
-
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 
 function KPI({ title, value, caption, icon: Icon, iconClass }) {
     return (
@@ -191,6 +168,7 @@ function PaymentBadge({ status }) {
 }
 
 export default function Report() {
+    const { showToast } = useToast();
     const today = new Date();
     const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
@@ -204,6 +182,10 @@ export default function Report() {
     // Live data states
     const [overviewData, setOverviewData] = useState(null);
     const [liveOrders, setLiveOrders] = useState([]);
+    const [generatedRange, setGeneratedRange] = useState({
+        from: initialFromDate,
+        to: initialToDate,
+    });
 
     // 1. Fetch overview summary from /analytics/overview
     useEffect(() => {
@@ -222,88 +204,124 @@ export default function Report() {
         return () => unsubscribe();
     }, []);
 
-    // 2. Fetch all orders from /orders collection
+    // 2. Fetch orders bounded by the selected report date range
     useEffect(() => {
-        const unsubscribe = onSnapshot(
-            collection(db, "orders"),
-            (snapshot) => {
-                if (!snapshot.empty) {
-                    const list = snapshot.docs.map((docSnap) => {
-                        const data = docSnap.data();
+        let isMounted = true;
+        let primaryUnsub = null;
+        let fallbackUnsub = null;
 
-                        // Safely normalize date to "YYYY-MM-DD"
-                        let rawDate = data.orderDate;
-                        if (!rawDate && data.createdAt?.toDate) {
-                            rawDate = toInputDate(data.createdAt.toDate());
-                        }
-                        let cleanDate = toInputDate(new Date());
-                        if (typeof rawDate === "string") {
-                            cleanDate = rawDate.slice(0, 10);
-                        } else if (rawDate && typeof rawDate.toDate === "function") {
-                            cleanDate = toInputDate(rawDate.toDate());
-                        } else if (rawDate) {
-                            cleanDate = toInputDate(new Date(rawDate));
-                        }
+        const handleSnapshot = (snapshot) => {
+            if (!isMounted) return;
+            if (!snapshot.empty) {
+                const list = snapshot.docs.map((docSnap) => {
+                    const data = docSnap.data();
 
-                        const items = Array.isArray(data.items) ? data.items : [];
-                        const totalUnits = Number(
-                            data.totalItems ??
-                            items.reduce((sum, i) => sum + Number(i.quantity || 0), 0)
-                        );
-                        const revenue = Number(data.totalAmount ?? data.total ?? 0);
-                        const grossSubtotal = Number(data.grossSubtotal ?? data.subtotal ?? revenue);
-                        const tax = Number(data.taxCollected ?? data.tax ?? 0);
-                        const delivery = Number(data.deliveryCharge ?? data.deliveryCharges ?? data.shipping ?? 0);
-                        const discount = Number(data.discount ?? 0);
-                        const cogs = Number(data.costOfGoods ?? 0);
-                        const profit = Number(data.netProfit ?? (revenue - cogs));
-                        const isPaid = String(data.paymentStatus || "").toLowerCase() === "paid";
-                        const paidAmount = Number(data.paidAmount ?? (isPaid ? revenue : 0));
-                        const unpaidAmount = Math.max(0, revenue - paidAmount);
+                    // Safely normalize date to "YYYY-MM-DD"
+                    let rawDate = data.orderDate;
+                    if (!rawDate && data.createdAt?.toDate) {
+                        rawDate = toInputDate(data.createdAt.toDate());
+                    }
+                    let cleanDate = toInputDate(new Date());
+                    if (typeof rawDate === "string") {
+                        cleanDate = rawDate.slice(0, 10);
+                    } else if (rawDate && typeof rawDate.toDate === "function") {
+                        cleanDate = toInputDate(rawDate.toDate());
+                    } else if (rawDate) {
+                        cleanDate = toInputDate(new Date(rawDate));
+                    }
 
-                        return {
-                            id: data.orderId || docSnap.id,
-                            orderDocId: data.orderDocId || docSnap.id,
-                            date: cleanDate,
-                            customer: data.customerName || data.customer || "Customer",
-                            customerPhone: data.customerPhone || data.phone || "",
-                            customerEmail: data.customerEmail || data.email || "",
-                            deliveryType: data.deliveryType || "normal",
-                            items: totalUnits,
-                            itemList: items,
-                            amount: revenue,
-                            grossSubtotal,
-                            taxCollected: tax,
-                            deliveryCharges: delivery,
-                            discounts: discount,
-                            costOfGoods: cogs,
-                            netProfit: profit,
-                            status: data.status || "Delivered",
-                            paymentMethod: data.paymentMethod || "Cash on Delivery",
-                            paymentStatus: data.paymentStatus || (data.status === "Delivered" ? "Paid" : "Pending"),
-                            paidAmount,
-                            unpaidAmount,
-                        };
-                    });
+                    const items = Array.isArray(data.items) ? data.items : [];
+                    const totalUnits = Number(
+                        data.totalItems ??
+                        items.reduce((sum, i) => sum + Number(i.quantity || 0), 0)
+                    );
+                    const revenue = Number(data.totalAmount ?? data.total ?? 0);
+                    const grossSubtotal = Number(data.grossSubtotal ?? data.subtotal ?? revenue);
+                    const tax = Number(data.taxCollected ?? data.tax ?? 0);
+                    const delivery = Number(data.deliveryCharge ?? data.deliveryCharges ?? data.shipping ?? 0);
+                    const discount = Number(data.discount ?? 0);
+                    const cogs = Number(data.costOfGoods ?? 0);
+                    const profit = Number(data.netProfit ?? (revenue - cogs));
+                    const isPaid = String(data.paymentStatus || "").toLowerCase() === "paid";
+                    const paidAmount = Number(data.paidAmount ?? (isPaid ? revenue : 0));
+                    const unpaidAmount = Math.max(0, revenue - paidAmount);
 
-                    list.sort((a, b) => b.date.localeCompare(a.date));
-                    setLiveOrders(list);
-                } else {
-                    setLiveOrders([]);
-                }
-            },
+                    return {
+                        id: data.orderId || docSnap.id,
+                        orderDocId: data.orderDocId || docSnap.id,
+                        date: cleanDate,
+                        customer: data.customerName || data.customer || "Customer",
+                        customerPhone: data.customerPhone || data.phone || "",
+                        customerEmail: data.customerEmail || data.email || "",
+                        deliveryType: data.deliveryType || "normal",
+                        items: totalUnits,
+                        itemList: items,
+                        amount: revenue,
+                        grossSubtotal,
+                        taxCollected: tax,
+                        deliveryCharges: delivery,
+                        discounts: discount,
+                        costOfGoods: cogs,
+                        netProfit: profit,
+                        status: data.status || "Delivered",
+                        paymentMethod: data.paymentMethod || "Cash on Delivery",
+                        paymentStatus: data.paymentStatus || (data.status === "Delivered" ? "Paid" : "Pending"),
+                        paidAmount,
+                        unpaidAmount,
+                    };
+                });
+
+                list.sort((a, b) => b.date.localeCompare(a.date));
+                setLiveOrders(list);
+            } else {
+                setLiveOrders([]);
+            }
+        };
+
+        const startDate = new Date(`${generatedRange.from}T00:00:00`);
+        const endDate = new Date(`${generatedRange.to}T23:59:59.999`);
+        const hasValidRange = !Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime());
+
+        const boundedQuery = hasValidRange
+            ? query(
+                collection(db, "orders"),
+                where("createdAt", ">=", Timestamp.fromDate(startDate)),
+                where("createdAt", "<=", Timestamp.fromDate(endDate)),
+                orderBy("createdAt", "desc"),
+                limit(500)
+            )
+            : query(
+                collection(db, "orders"),
+                orderBy("createdAt", "desc"),
+                limit(500)
+            );
+
+        primaryUnsub = onSnapshot(
+            boundedQuery,
+            handleSnapshot,
             (error) => {
-                console.warn("Orders subscription warning:", error.message);
+                console.warn("Bounded orders report query failed, falling back:", error.message);
+                if (typeof primaryUnsub === "function") {
+                    primaryUnsub();
+                    primaryUnsub = null;
+                }
+                if (!isMounted) return;
+                fallbackUnsub = onSnapshot(
+                    query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(500)),
+                    handleSnapshot,
+                    (fallbackErr) => {
+                        console.warn("Orders subscription warning:", fallbackErr.message);
+                    }
+                );
             }
         );
 
-        return () => unsubscribe();
-    }, []);
-
-    const [generatedRange, setGeneratedRange] = useState({
-        from: initialFromDate,
-        to: initialToDate,
-    });
+        return () => {
+            isMounted = false;
+            if (typeof primaryUnsub === "function") primaryUnsub();
+            if (typeof fallbackUnsub === "function") fallbackUnsub();
+        };
+    }, [generatedRange.from, generatedRange.to]);
 
     const report = useMemo(() => {
         const filteredOrders = liveOrders.filter(
@@ -362,13 +380,14 @@ export default function Report() {
         if (loading) return;
 
         if (!fromDate || !toDate) {
-            window.alert("Please select both the start date and end date.");
+            showToast("Please select both the start date and end date.", "error");
             return;
         }
 
         if (fromDate > toDate) {
-            window.alert(
-                "The start date must be earlier than or equal to the end date."
+            showToast(
+                "The start date must be earlier than or equal to the end date.",
+                "error"
             );
             return;
         }
@@ -407,7 +426,7 @@ export default function Report() {
     const activeDelivery = hasLiveOrders ? report.deliveryCharges : (overviewData?.deliveryCharges || 0);
     const activeDiscounts = hasLiveOrders ? report.discounts : (overviewData?.discounts || 0);
     const activeCogs = hasLiveOrders ? report.costOfGoods : (overviewData?.costOfGoods || 0);
-    const activePaid = hasLiveOrders ? report.totalPaid : (overviewData?.totalPaid || activeRevenue);
+    const activePaid = hasLiveOrders ? report.totalPaid : (overviewData?.totalPaid ?? 0);
     const activeReceivables = hasLiveOrders ? report.totalReceivables : (overviewData?.totalReceivables || 0);
 
     const exportCsv = () => {
@@ -420,7 +439,7 @@ export default function Report() {
                 dateLabel(generatedRange.to),
             ],
             [],
-            ["Financial Metric", "Value (₹)"],
+            ["Financial Metric", "Value (€)"],
             ["Total Sales Revenue", activeRevenue],
             ["Net Profit", activeProfit],
             ["Total Orders Processed", activeOrders],
@@ -487,8 +506,8 @@ export default function Report() {
         },
         {
             title: "Total Orders",
-            value: Number(activeOrders).toLocaleString("en-IN"),
-            caption: `${Number(activeItems).toLocaleString("en-IN")} items sold`,
+            value: formatNumber(activeOrders),
+            caption: `${formatNumber(activeItems)} items sold`,
             icon: FaShoppingBag,
             iconClass: "bg-tertiary/30 text-secondary",
         },
@@ -638,7 +657,7 @@ export default function Report() {
                                     </div>
 
                                     <p className="mt-3 text-2xl font-bold text-gray-900">
-                                        {Number(activeOrders).toLocaleString("en-IN")}
+                                        {formatNumber(activeOrders)}
                                     </p>
 
                                     <p className="mt-1 text-[11px] text-secondary/60">
@@ -655,7 +674,7 @@ export default function Report() {
                                     </div>
 
                                     <p className="mt-3 text-2xl font-bold text-gray-900">
-                                        {Number(activeItems).toLocaleString("en-IN")}
+                                        {formatNumber(activeItems)}
                                     </p>
 
                                     <p className="mt-1 text-[11px] text-secondary/60">

@@ -11,6 +11,17 @@ import {logInfo, logError} from "../../shared/logger.js";
 const round2 = (num) => Math.round((Number(num || 0) + Number.EPSILON) * 100) / 100;
 
 /**
+ * Parses a positive finite numeric value, returning null for empty strings, null, undefined, or <= 0.
+ * @param {any} val
+ * @return {number|null}
+ */
+const toPositiveNumber = (val) => {
+  if (val === "" || val === null || val === undefined) return null;
+  const num = Number(val);
+  return Number.isFinite(num) && num > 0 ? num : null;
+};
+
+/**
  * Safely parses Firestore Timestamps, ISO strings, Date objects, and numbers into a Date object.
  * @param {any} value
  * @return {Date|null}
@@ -415,14 +426,15 @@ export const placeOrderService = async (userId, userEmail, payload) => {
         );
       }
 
-      // Authoritative pricing check
-      let unitPrice = Number(product.offerPrice ?? product.mrp ?? 0);
+      // Authoritative pricing check (treat empty/null/zero offerPrice as unset and fall back to mrp)
+      let unitPrice = toPositiveNumber(product.offerPrice) ?? toPositiveNumber(product.mrp) ?? 0;
 
       // Check scheme pricing if applied
       if (itemRequest.schemeId && Array.isArray(product.schemes)) {
         const matchedScheme = product.schemes.find((s) => s.schemeId === itemRequest.schemeId);
-        if (matchedScheme && matchedScheme.offerPrice !== undefined) {
-          unitPrice = Number(matchedScheme.offerPrice);
+        const schemeOfferPrice = toPositiveNumber(matchedScheme?.offerPrice);
+        if (schemeOfferPrice !== null) {
+          unitPrice = schemeOfferPrice;
         }
       }
 
@@ -694,7 +706,7 @@ export const validatePromoCodeService = async (userId, payload = {}) => {
       const productDoc = productDocs[i];
       if (!productDoc.exists) continue;
       const product = productDoc.data() || {};
-      const unitPrice = Number(product.offerPrice ?? product.mrp ?? 0);
+      const unitPrice = toPositiveNumber(product.offerPrice) ?? toPositiveNumber(product.mrp) ?? 0;
       const itemTotal = round2(unitPrice * itemRequest.quantity);
       grossSubtotal = round2(grossSubtotal + itemTotal);
 
@@ -766,6 +778,7 @@ export const postOrderTasks = async (userId, orderResult) => {
       orderId: orderResult.orderId,
       orderDocId: orderResult.orderDocId,
       type: "ORDER",
+      status: "Unread",
       read: false,
       createdAt: FieldValue.serverTimestamp(),
     });
@@ -775,4 +788,103 @@ export const postOrderTasks = async (userId, orderResult) => {
   } catch (err) {
     logError("Post-order tasks error:", {error: err.message});
   }
+};
+
+/**
+ * Updates an existing order's fulfillment or payment status atomically.
+ * Restores product stock once when transitioning a non-cancelled order to Cancelled.
+ * @param {string} adminId
+ * @param {Object} payload
+ * @return {Promise<Object>}
+ */
+export const updateOrderStatusService = async (adminId, payload = {}) => {
+  const orderRef = db.collection("orders").doc(payload.orderDocId);
+
+  return await db.runTransaction(async (transaction) => {
+    const orderSnap = await transaction.get(orderRef);
+    if (!orderSnap.exists) {
+      throw new Error("Order not found.");
+    }
+
+    const orderData = orderSnap.data() || {};
+    const prevStatus = String(orderData.status || "New");
+    const nextStatus = payload.status || prevStatus;
+
+    const shouldRestoreStock =
+      prevStatus.toLowerCase() !== "cancelled" &&
+      nextStatus.toLowerCase() === "cancelled" &&
+      orderData.stockRestored !== true;
+
+    const itemRestores = [];
+    if (shouldRestoreStock && Array.isArray(orderData.items)) {
+      const qtyByProduct = new Map();
+      for (const item of orderData.items) {
+        const pid = String(item.productId || item.id || "").trim();
+        const qty = Number(item.quantity || item.qty || 0);
+        if (pid && qty > 0) {
+          qtyByProduct.set(pid, (qtyByProduct.get(pid) || 0) + qty);
+        }
+      }
+
+      for (const [productId, quantity] of qtyByProduct.entries()) {
+        const productRef = db.collection("products").doc(productId);
+        const productSnap = await transaction.get(productRef);
+        if (productSnap.exists) {
+          itemRestores.push({productRef, quantity});
+        }
+      }
+    }
+
+    const updateFields = {
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: adminId,
+    };
+
+    if (payload.status) {
+      updateFields.status = payload.status;
+      if (payload.status === "Delivered" && !orderData.deliveredAt) {
+        updateFields.deliveredAt = FieldValue.serverTimestamp();
+      }
+      if (payload.status === "Cancelled" && !orderData.cancelledAt) {
+        updateFields.cancelledAt = FieldValue.serverTimestamp();
+      }
+    }
+
+    if (payload.paymentStatus) {
+      updateFields.paymentStatus = payload.paymentStatus;
+    }
+
+    if (payload.paidAmount !== undefined) {
+      updateFields.paidAmount = round2(payload.paidAmount);
+    }
+
+    if (payload.note !== undefined) {
+      updateFields.adminNote = payload.note;
+    }
+
+    if (shouldRestoreStock) {
+      updateFields.stockRestored = true;
+      for (const {productRef, quantity} of itemRestores) {
+        transaction.update(productRef, {
+          stock: FieldValue.increment(quantity),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
+    transaction.update(orderRef, updateFields);
+
+    return {
+      orderDocId: orderRef.id,
+      orderId: orderData.orderId || orderRef.id,
+      previousStatus: prevStatus,
+      status: nextStatus,
+      paymentStatus: payload.paymentStatus || orderData.paymentStatus || "Pending",
+      paidAmount:
+        payload.paidAmount !== undefined ?
+          round2(payload.paidAmount) :
+          round2(orderData.paidAmount ?? 0),
+      stockRestored: shouldRestoreStock,
+    };
+  });
 };

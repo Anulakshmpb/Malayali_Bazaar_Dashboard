@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
     Bell,
     CalendarCheck,
@@ -22,12 +23,15 @@ import {
     collection,
     query,
     orderBy,
+    limit,
     onSnapshot,
     updateDoc,
     doc,
     writeBatch,
 } from "firebase/firestore";
 import { db } from "../../Config/Firebase";
+import { useToast } from "../../Shared/hooks/ToastContext";
+import { formatCurrency } from "../../Shared/utils/formatters";
 const getDate = (value) => {
     if (!value) return null;
     try {
@@ -331,15 +335,24 @@ const EmptyNotifications = ({ filter }) => {
     );
 };
 
+const isUnreadNotification = (item = {}) =>
+    item.status === "Unread" || (!item.status && item.read === false);
+
 const NotificationDetailsModal = ({
     notification,
     onClose,
+    onOpenOrder,
 }) => {
     if (!notification) return null;
 
     const config = getNotificationConfig(notification);
     const Icon = config.icon;
-    const details = notification.details;
+    const details = notification.details || {};
+    const resolvedOrderId = notification.orderDocId || notification.orderId || details.orderDocId || details.orderId;
+    const displayCustomerName = details.customerName || details.userName || notification.customerName;
+    const displayCustomerPhone = details.customerPhone || details.userPhone || notification.customerPhone;
+    const displayTotal = details.totalAmount ?? notification.totalAmount;
+    const displayStatus = details.status || notification.orderStatus || notification.type;
 
     const DetailRow = ({ label, children }) => (
         <div className="flex items-start justify-between gap-4 py-3 border-b border-tertiary/40 last:border-0">
@@ -418,133 +431,87 @@ const NotificationDetailsModal = ({
                         </h4>
 
                         <p className="text-sm text-secondary/70 mt-2 leading-relaxed whitespace-pre-line">
-                            {notification.message || "No message available."}
+                            {notification.message || notification.body || "No message available."}
                         </p>
                     </div>
 
-                    {details && (
-                        <>
-
-
-                            <div className="bg-slate-50 border border-tertiary/40 rounded-xl p-4">
-
-                                <div className="flex items-center gap-2 mb-3">
-                                    <CalendarCheck className="w-4 h-4 text-primary" />
-
-                                    <h5 className="text-sm font-bold text-gray-900">
-                                        Booking Information
-                                    </h5>
-                                </div>
-
-                                <DetailRow label="Booking No">
-                                    {details.bookingNo}
-                                </DetailRow>
-
-                                <DetailRow label="Route Name">
-                                    {details.routeName}
-                                </DetailRow>
-
-                                <DetailRow label="Starting Point">
-                                    <span className="inline-flex items-center gap-1">
-                                        <MapPin className="w-3.5 h-3.5 text-primary" />
-                                        {details.startingPoint}
-                                    </span>
-                                </DetailRow>
-
-                                <DetailRow label="Drop Point">
-                                    <span className="inline-flex items-center gap-1">
-                                        <MapPin className="w-3.5 h-3.5 text-red-500" />
-                                        {details.dropPoint}
-                                    </span>
-                                </DetailRow>
-
-                                <DetailRow label="Journey Date">
-                                    {details.date}
-                                </DetailRow>
-
-                                <DetailRow label="Departure">
-                                    {details.departureTime}
-                                </DetailRow>
-
-                                <DetailRow label="Arrival">
-                                    {details.arrivalTime}
-                                </DetailRow>
-
-                                <DetailRow label="Driver">
-                                    {details.driverName}
-                                </DetailRow>
-
+                    {(resolvedOrderId || notification.details) && (
+                        <div className="bg-slate-50 border border-tertiary/40 rounded-xl p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                                <CalendarCheck className="w-4 h-4 text-primary" />
+                                <h5 className="text-sm font-bold text-gray-900">
+                                    Order & Activity Summary
+                                </h5>
                             </div>
-                            <div className="bg-slate-50 border border-tertiary/40 rounded-xl p-4">
 
-                                <div className="flex items-center gap-2 mb-3">
-                                    <User className="w-4 h-4 text-primary" />
-
-                                    <h5 className="text-sm font-bold text-gray-900">
-                                        Customer Information
-                                    </h5>
-                                </div>
-
-                                <DetailRow label="Booked By">
-                                    {details.userName}
+                            {resolvedOrderId && (
+                                <DetailRow label="Order Reference">
+                                    {notification.orderId || resolvedOrderId}
                                 </DetailRow>
+                            )}
 
+                            {displayCustomerName && (
+                                <DetailRow label="Customer">
+                                    <span className="inline-flex items-center gap-1.5">
+                                        <User className="w-3.5 h-3.5 text-primary" />
+                                        {displayCustomerName}
+                                    </span>
+                                </DetailRow>
+                            )}
+
+                            {displayCustomerPhone && (
                                 <DetailRow label="Contact">
-                                    <span className="inline-flex items-center gap-1">
-                                        <Phone className="w-3.5 h-3.5" />
-                                        {details.userPhone}
+                                    <span className="inline-flex items-center gap-1.5">
+                                        <Phone className="w-3.5 h-3.5 text-primary" />
+                                        {displayCustomerPhone}
                                     </span>
                                 </DetailRow>
+                            )}
 
-                                <DetailRow label="Passengers">
-                                    {details.passengerCount}
+                            {displayTotal !== undefined && displayTotal !== null && (
+                                <DetailRow label="Total Amount">
+                                    {formatCurrency(displayTotal)}
                                 </DetailRow>
+                            )}
 
-                                {Array.isArray(details.passengers) &&
-                                    details.passengers.length > 0 && (
+                            {displayStatus && (
+                                <DetailRow label="Category / Status">
+                                    {displayStatus}
+                                </DetailRow>
+                            )}
 
-                                        <div className="pt-4">
-                                            <h6 className="text-xs font-bold text-secondary/70 mb-3">
-                                                Passenger List
-                                            </h6>
-
-                                            <div className="space-y-2">
-
-                                                {details.passengers.map((passenger, index) => (
-                                                    <div
-                                                        key={`${passenger.mobile || "passenger"}-${index}`}
-                                                        className="flex items-center justify-between gap-3 bg-white border border-tertiary/40 rounded-lg p-3"
-                                                    >
-                                                        <span className="text-xs font-semibold text-gray-900">
-                                                            {passenger.name || "N/A"}
-                                                        </span>
-
-                                                        <span className="text-xs text-secondary/70">
-                                                            {passenger.mobile || "N/A"}
-                                                        </span>
-                                                    </div>
-                                                ))}
-
-                                            </div>
-                                        </div>
-
-                                    )}
-
-                            </div>
-
-                        </>
+                            {details.deliveryAddress && (
+                                <DetailRow label="Delivery Address">
+                                    <span className="inline-flex items-center gap-1">
+                                        <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+                                        {[
+                                            details.deliveryAddress.addressLine,
+                                            details.deliveryAddress.postalCode,
+                                            details.deliveryAddress.city,
+                                        ].filter(Boolean).join(", ")}
+                                    </span>
+                                </DetailRow>
+                            )}
+                        </div>
                     )}
 
                 </div>
 
-                <div className="p-5 border-t border-tertiary/40">
+                <div className="p-5 border-t border-tertiary/40 flex flex-wrap gap-3">
+                    {resolvedOrderId && onOpenOrder && (
+                        <button
+                            type="button"
+                            onClick={() => onOpenOrder(resolvedOrderId)}
+                            className="flex-1 inline-flex items-center justify-center gap-2 bg-slate-900 text-white rounded-xl py-3 px-4 text-sm font-semibold hover:bg-slate-800 transition-all"
+                        >
+                            <span>View Order</span>
+                            <ArrowRight className="w-4 h-4" />
+                        </button>
+                    )}
                     <button
+                        type="button"
                         onClick={onClose}
-                        className="
-              w-full bg-primary text-white
-              rounded-xl py-3 text-sm font-semibold
-              hover:opacity-90 transition-all
-            "
+                        className="flex-1 bg-primary text-white rounded-xl py-3 px-4 text-sm font-semibold hover:opacity-90 transition-all"
                     >
                         Close Notification
                     </button>
@@ -556,16 +523,22 @@ const NotificationDetailsModal = ({
 };
 
 export const Notification = () => {
+    const navigate = useNavigate();
+    const { showToast } = useToast();
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedNotif, setSelectedNotif] = useState(null);
     const [filter, setFilter] = useState("All");
     const [updating, setUpdating] = useState(false);
     const [error, setError] = useState("");
+    const [refreshKey, setRefreshKey] = useState(0);
+
     useEffect(() => {
+        setLoading(true);
         const notificationQuery = query(
             collection(db, "admin_notification"),
-            orderBy("createdAt", "desc")
+            orderBy("createdAt", "desc"),
+            limit(100)
         );
 
         const unsubscribe = onSnapshot(
@@ -589,13 +562,11 @@ export const Notification = () => {
         );
 
         return () => unsubscribe();
-    }, []);
+    }, [refreshKey]);
 
     const unreadCount = useMemo(
         () =>
-            notifications.filter(
-                (item) => item.status === "Unread"
-            ).length,
+            notifications.filter((item) => isUnreadNotification(item)).length,
         [notifications]
     );
 
@@ -612,15 +583,11 @@ export const Notification = () => {
 
     const filteredNotifications = useMemo(() => {
         if (filter === "Unread") {
-            return notifications.filter(
-                (item) => item.status === "Unread"
-            );
+            return notifications.filter((item) => isUnreadNotification(item));
         }
 
         if (filter === "Read") {
-            return notifications.filter(
-                (item) => item.status !== "Unread"
-            );
+            return notifications.filter((item) => !isUnreadNotification(item));
         }
 
         return notifications;
@@ -639,16 +606,16 @@ export const Notification = () => {
         try {
             await updateDoc(
                 doc(db, "admin_notification", id),
-                { status: "Read" }
+                { status: "Read", read: true }
             );
         } catch (err) {
             console.error("Error marking notification as read:", err);
-            alert("Unable to update notification. Please try again.");
+            showToast("Unable to update notification. Please try again.", "error");
         }
     };
     const handleMarkAllRead = async () => {
-        const unreadNotifications = notifications.filter(
-            (item) => item.status === "Unread"
+        const unreadNotifications = notifications.filter((item) =>
+            isUnreadNotification(item)
         );
 
         if (!unreadNotifications.length || updating) return;
@@ -668,7 +635,7 @@ export const Notification = () => {
                     .forEach((item) => {
                         batch.update(
                             doc(db, "admin_notification", item.id),
-                            { status: "Read" }
+                            { status: "Read", read: true }
                         );
                     });
 
@@ -676,7 +643,7 @@ export const Notification = () => {
             }
         } catch (err) {
             console.error("Error marking all as read:", err);
-            alert("Unable to mark all notifications as read.");
+            showToast("Unable to mark all notifications as read.", "error");
         } finally {
             setUpdating(false);
         }
@@ -686,7 +653,7 @@ export const Notification = () => {
     const handleViewNotification = async (notification) => {
         setSelectedNotif(notification);
 
-        if (notification.status === "Unread") {
+        if (isUnreadNotification(notification)) {
             await handleMarkRead(notification.id);
         }
     };
@@ -730,7 +697,8 @@ export const Notification = () => {
                     <div className="flex items-center gap-3">
 
                         <button
-                            onClick={() => window.location.reload()}
+                            type="button"
+                            onClick={() => setRefreshKey((prev) => prev + 1)}
                             className="
                 flex items-center gap-2
                 px-4 py-2.5 rounded-xl
@@ -965,6 +933,12 @@ export const Notification = () => {
                 <NotificationDetailsModal
                     notification={selectedNotif}
                     onClose={() => setSelectedNotif(null)}
+                    onOpenOrder={(orderDocId) => {
+                        setSelectedNotif(null);
+                        navigate(`/orders/view/${encodeURIComponent(orderDocId)}`, {
+                            state: { orderId: orderDocId },
+                        });
+                    }}
                 />
             )}
 

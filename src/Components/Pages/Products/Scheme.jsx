@@ -275,7 +275,7 @@ function SchemeManagement() {
       return "Not available";
     }
 
-    return date.toLocaleString("en-IN", {
+    return date.toLocaleString("en-GB", {
       day: "2-digit",
       month: "short",
       year: "numeric",
@@ -670,7 +670,7 @@ function SchemeManagement() {
                   </div>
 
                   <p className="text-sm font-medium text-slate-700">
-                    {formatDate(selectedScheme.createAt)}
+                    {formatDate(selectedScheme.createdAt || selectedScheme.createAt)}
                   </p>
                 </div>
 

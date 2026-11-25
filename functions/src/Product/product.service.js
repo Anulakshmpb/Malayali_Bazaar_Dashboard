@@ -16,7 +16,6 @@ const addProductService = async (data) => {
   try {
     const counterRef = db.collection("configurations").doc("product");
     const productRef = db.collection("products").doc();
-    const analyticsRef = db.collection("analytics").doc("products");
 
     const {
       productName,
@@ -169,8 +168,8 @@ const addProductService = async (data) => {
         unit,
         stock,
         mrp,
-        offerPrice: offerPrice ?? "",
-        distributorPrice: distributorPrice ?? "",
+        offerPrice: offerPrice === "" || offerPrice === undefined ? null : offerPrice,
+        distributorPrice: distributorPrice === "" || distributorPrice === undefined ? null : distributorPrice,
         thumbnail: thumbnail ?? "",
         images: images || [],
         similarProducts,
@@ -187,11 +186,6 @@ const addProductService = async (data) => {
       }, {merge: true});
 
       transaction.set(productRef, newProductData);
-
-      transaction.set(analyticsRef, {
-        count: FieldValue.increment(1),
-        updatedAt: FieldValue.serverTimestamp(),
-      }, {merge: true});
     });
 
     return {
@@ -340,7 +334,6 @@ const deleteProductService = async (data) => {
 
     const productsCollection = db.collection("products");
     const productRef = productsCollection.doc(productDocId);
-    const analyticsRef = db.collection("analytics").doc("products");
 
     await db.runTransaction(async (transaction) => {
       const productDoc = await transaction.get(productRef);
@@ -386,11 +379,6 @@ const deleteProductService = async (data) => {
       });
 
       transaction.delete(productRef);
-
-      transaction.set(analyticsRef, {
-        count: FieldValue.increment(-1),
-        updatedAt: FieldValue.serverTimestamp(),
-      }, {merge: true});
     });
 
     return {

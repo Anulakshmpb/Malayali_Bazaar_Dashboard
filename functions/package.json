@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "lint": "eslint .",
+    "test": "node --test test/*.test.mjs",
     "serve": "firebase emulators:start --only functions",
     "shell": "firebase functions:shell",
     "start": "npm run shell",

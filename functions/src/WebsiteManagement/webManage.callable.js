@@ -2,6 +2,7 @@ import {FieldValue} from "firebase-admin/firestore";
 import Joi from "joi";
 import {callableWrapper} from "../../shared/callable.wrapper.js";
 import {db} from "../../shared/config.js";
+import {requireActiveAdmin, fail} from "../../shared/utils.js";
 
 const websiteManagement = db.collection("websiteManagement");
 
@@ -56,12 +57,6 @@ const validate = (schema, data) => {
 // =====================================================
 // 3. AUTHENTICATION AND REQUEST HELPERS
 // =====================================================
-
-const requireAuth = (req) => {
-  if (!req.auth) {
-    throw new Error("User is not authenticated");
-  }
-};
 
 const getAction = (req) => req.data?.action;
 
@@ -363,7 +358,7 @@ const manageWebsitePage = async (action, type, fields = {}) => {
 export const manageWebsiteManagement = callableWrapper(
     async (req) => {
       try {
-        requireAuth(req);
+        await requireActiveAdmin(req);
 
         const action = getAction(req);
         const type = getType(req);
@@ -514,17 +509,7 @@ export const manageWebsiteManagement = callableWrapper(
           },
         };
       } catch (error) {
-        console.error(
-            "Website management operation failed:",
-            error,
-        );
-
-        return {
-          success: false,
-          message:
-          error.message ||
-          "Website management operation failed.",
-        };
+        return fail(error, "Website management operation failed.");
       }
     },
 );

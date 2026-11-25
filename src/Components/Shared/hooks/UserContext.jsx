@@ -20,6 +20,13 @@ import { auth, db } from '../../Config/Firebase';
 
 export const UserContext = createContext(null);
 
+const isAdminRecordActive = (record) =>
+  Boolean(
+    record &&
+      (record.status === undefined ||
+        String(record.status).toLowerCase() === 'active')
+  );
+
 export const useUser = () => {
   const context = useContext(UserContext);
   if (!context) {
@@ -171,13 +178,20 @@ export const UserProvider = ({ children }) => {
                   ...adminSnap.data(),
                 };
                 setAdminUser(adminData);
-                setError(null);
 
                 if (unsubscribePermissionDoc) {
                   unsubscribePermissionDoc();
                   unsubscribePermissionDoc = null;
                 }
 
+                if (!isAdminRecordActive(adminData)) {
+                  setPermissions(null);
+                  setError('Your admin account is disabled or removed.');
+                  setLoading(false);
+                  return;
+                }
+
+                setError(null);
                 const permUnsub = await loadPermissionsForAdmin(adminData);
                 if (permUnsub) {
                   unsubscribePermissionDoc = permUnsub;
@@ -198,13 +212,20 @@ export const UserProvider = ({ children }) => {
                       ...firstDoc.data(),
                     };
                     setAdminUser(fallbackData);
-                    setError(null);
 
                     if (unsubscribePermissionDoc) {
                       unsubscribePermissionDoc();
                       unsubscribePermissionDoc = null;
                     }
 
+                    if (!isAdminRecordActive(fallbackData)) {
+                      setPermissions(null);
+                      setError('Your admin account is disabled or removed.');
+                      setLoading(false);
+                      return;
+                    }
+
+                    setError(null);
                     const permUnsub = await loadPermissionsForAdmin(fallbackData);
                     if (permUnsub) {
                       unsubscribePermissionDoc = permUnsub;
@@ -295,7 +316,7 @@ export const UserProvider = ({ children }) => {
   // Permission checker for routes
   const hasPermission = useCallback(
     (routePath) => {
-      if (!adminUser) return false;
+      if (!isAdminRecordActive(adminUser)) return false;
 
       // Super Admin bypasses all route permission checks
       const role = String(adminUser.role || '').trim().toLowerCase();
@@ -348,7 +369,7 @@ export const UserProvider = ({ children }) => {
   );
 
   const allowedRoutes = useMemo(() => {
-    if (!adminUser) return [];
+    if (!isAdminRecordActive(adminUser)) return [];
     const role = String(adminUser.role || '').trim().toLowerCase();
     if (
       role === 'super admin' ||
@@ -361,6 +382,8 @@ export const UserProvider = ({ children }) => {
     return permissions?.permissions || permissions?.allowedRoutes || [];
   }, [adminUser, permissions]);
 
+  const isActiveAdmin = isAdminRecordActive(adminUser);
+
   const value = useMemo(
     () => ({
       user,
@@ -371,9 +394,9 @@ export const UserProvider = ({ children }) => {
       allowedRoutes,
       loading,
       error,
-      isAuthenticated: Boolean(user && adminUser),
-      isAdmin: Boolean(adminUser && adminUser.status !== 'inactive'),
-      isActive: adminUser?.status === 'active',
+      isAuthenticated: Boolean(user && isActiveAdmin),
+      isAdmin: isActiveAdmin,
+      isActive: isActiveAdmin,
       role: adminUser?.role || '',
       name: adminUser?.name || '',
       email: adminUser?.email || user?.email || '',
@@ -385,6 +408,7 @@ export const UserProvider = ({ children }) => {
     [
       user,
       adminUser,
+      isActiveAdmin,
       permissions,
       allowedRoutes,
       loading,

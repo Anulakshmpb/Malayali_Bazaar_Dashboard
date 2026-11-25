@@ -19,8 +19,9 @@ import {
     serverTimestamp,
     setDoc
 } from "firebase/firestore";
-import { toast } from "sonner";
 import { db } from "../../Config/Firebase";
+import { useToast } from "../../Shared/hooks/ToastContext";
+import { useConfirm } from "../../Shared/ui/ConfirmDialog";
 
 const NOTIFICATION_TYPES = [
     {
@@ -115,6 +116,8 @@ const getNotificationType = (type) => {
 };
 
 export default function NotificationTemplates() {
+    const { showToast } = useToast();
+    const confirm = useConfirm();
     const [templates, setTemplates] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -146,7 +149,7 @@ export default function NotificationTemplates() {
             );
         } catch (error) {
             console.error("Fetch notification templates:", error);
-            toast.error("Unable to load notification templates.");
+            showToast("Unable to load notification templates.", "error");
         } finally {
             setLoading(false);
         }
@@ -154,7 +157,7 @@ export default function NotificationTemplates() {
 
     useEffect(() => {
         fetchTemplates();
-    }, []);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const filteredTemplates = useMemo(() => {
         return templates.filter((item) => {
@@ -197,7 +200,7 @@ export default function NotificationTemplates() {
         event.preventDefault();
 
         if (!formData.title.trim() || !formData.message.trim()) {
-            toast.error("Please enter the notification title and message.");
+            showToast("Please enter the notification title and message.", "error");
             return;
         }
 
@@ -222,10 +225,11 @@ export default function NotificationTemplates() {
                 { merge: true }
             );
 
-            toast.success(
+            showToast(
                 currentTemplate
                     ? "Notification template updated."
-                    : "Notification template created."
+                    : "Notification template created.",
+                "success"
             );
 
             setIsModalOpen(false);
@@ -234,16 +238,18 @@ export default function NotificationTemplates() {
             await fetchTemplates();
         } catch (error) {
             console.error("Save notification template:", error);
-            toast.error("Unable to save notification template.");
+            showToast("Unable to save notification template.", "error");
         } finally {
             setSaving(false);
         }
     };
 
     const handleDelete = async (template) => {
-        const confirmed = window.confirm(
-            `Delete the "${template.title}" notification template?`
-        );
+        const confirmed = await confirm({
+            title: "Delete Template",
+            message: `Delete the "${template.title}" notification template?`,
+            confirmLabel: "Delete",
+        });
 
         if (!confirmed) return;
 
@@ -256,19 +262,19 @@ export default function NotificationTemplates() {
                 previous.filter((item) => item.id !== template.id)
             );
 
-            toast.success("Notification template deleted.");
+            showToast("Notification template deleted.", "success");
         } catch (error) {
             console.error("Delete notification template:", error);
-            toast.error("Unable to delete notification template.");
+            showToast("Unable to delete notification template.", "error");
         }
     };
 
     const handleCopyVariable = async (variable) => {
         try {
             await navigator.clipboard.writeText(variable);
-            toast.success(`${variable} copied.`);
+            showToast(`${variable} copied.`, "success");
         } catch {
-            toast.error("Unable to copy variable.");
+            showToast("Unable to copy variable.", "error");
         }
     };
 

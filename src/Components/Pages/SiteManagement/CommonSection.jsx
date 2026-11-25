@@ -22,6 +22,7 @@ import {
 
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app } from '../../Config/Firebase';
+import { useConfirm } from '../../Shared/ui/ConfirmDialog';
 
 const PAGES = [
     {
@@ -476,7 +477,7 @@ function ContactEditor({ content, onChange }) {
 
                         <input
                             className={`${inputCls} pl-9`}
-                            placeholder="+91 98765 43210"
+                            placeholder="+49 170 1234567"
                             value={content.phone ?? ''}
                             onChange={set('phone')}
                         />
@@ -639,6 +640,7 @@ function Preview({ page, content }) {
 }
 
 export default function CommonSection() {
+    const confirm = useConfirm();
     const [activeSlug, setActiveSlug] = useState(PAGES[0].slug);
     const [contents, setContents] = useState(INITIAL);
     const [existingPages, setExistingPages] = useState([]);
@@ -785,9 +787,11 @@ export default function CommonSection() {
             return;
         }
 
-        const confirmed = window.confirm(
-            `Are you sure you want to delete "${page.label}" from Firestore?`
-        );
+        const confirmed = await confirm({
+            title: "Delete Page Content",
+            message: `Are you sure you want to delete "${page.label}" from Firestore?`,
+            confirmLabel: "Delete",
+        });
 
         if (!confirmed) {
             return;

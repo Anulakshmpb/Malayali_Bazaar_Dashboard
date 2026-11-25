@@ -2,11 +2,13 @@
 import React, {
     useCallback,
     useEffect,
+    useMemo,
     useRef,
     useState,
 } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
+    ArrowLeft,
     Link2,
     Trash2,
     Loader2,
@@ -16,9 +18,10 @@ import {
     X,
     RefreshCw,
 } from "lucide-react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, doc, getDoc, limit, onSnapshot, query } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { db, app } from "../../Config/Firebase";
+import { useConfirm } from "../../Shared/ui/ConfirmDialog";
 
 const functions = getFunctions(app, "europe-west1");
 const manageSection = httpsCallable(functions, "manageSection");
@@ -27,40 +30,16 @@ function ProductAutocomplete({
     value,
     onChange,
     excludeIds = [],
+    allProducts = [],
+    loading = false,
+    error = "",
 }) {
-    const [allProducts, setAllProducts] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState(value || "");
     const [isOpen, setIsOpen] = useState(false);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
-    const [error, setError] = useState("");
 
     const wrapperRef = useRef(null);
     const listRef = useRef(null);
-    useEffect(() => {
-        setLoading(true);
-        setError("");
-
-        const unsubscribe = onSnapshot(
-            collection(db, "products"),
-            (snapshot) => {
-                const products = snapshot.docs.map((document) => ({
-                    id: document.id,
-                    ...document.data(),
-                }));
-
-                setAllProducts(products);
-                setLoading(false);
-            },
-            (err) => {
-                console.error("Failed to load products:", err);
-                setError("Unable to load products from the database.");
-                setLoading(false);
-            }
-        );
-
-        return unsubscribe;
-    }, []);
 
     useEffect(() => {
         setSearchTerm(value || "");
@@ -183,6 +162,7 @@ function ProductAutocomplete({
                     role="combobox"
                     aria-autocomplete="list"
                     aria-haspopup="listbox"
+                    aria-controls="section-product-listbox"
                     aria-expanded={isOpen}
                     autoComplete="off"
                     value={searchTerm}
@@ -197,6 +177,7 @@ function ProductAutocomplete({
             {isOpen && (
                 <div
                     ref={listRef}
+                    id="section-product-listbox"
                     role="listbox"
                     className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl"
                     style={{ scrollbarWidth: "thin" }}
@@ -289,12 +270,17 @@ function ProductAutocomplete({
 export default function ViewSection() {
     const navigate = useNavigate();
     const location = useLocation();
+    const { id: paramSectionId } = useParams();
+    const confirm = useConfirm();
 
-    const sectionId = location.state?.sectionId;
+    const sectionId = paramSectionId || location.state?.sectionId;
 
     const [section, setSection] = useState(null);
     const [products, setProducts] = useState([]);
     const [selectedProduct, setSelectedProduct] = useState(null);
+    const [catalogProducts, setCatalogProducts] = useState([]);
+    const [loadingCatalog, setLoadingCatalog] = useState(true);
+    const [catalogError, setCatalogError] = useState("");
 
     const [loadingSection, setLoadingSection] = useState(true);
     const [savingProducts, setSavingProducts] = useState(false);
@@ -303,6 +289,40 @@ export default function ViewSection() {
 
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
+
+    // Single bounded catalog listener shared by ProductAutocomplete and ProductThumbnail
+    useEffect(() => {
+        setLoadingCatalog(true);
+        setCatalogError("");
+
+        const unsubscribe = onSnapshot(
+            query(collection(db, "products"), limit(500)),
+            (snapshot) => {
+                setCatalogProducts(
+                    snapshot.docs.map((document) => ({
+                        id: document.id,
+                        ...document.data(),
+                    }))
+                );
+                setLoadingCatalog(false);
+            },
+            (err) => {
+                console.error("Failed to load products:", err);
+                setCatalogError("Unable to load products from the database.");
+                setLoadingCatalog(false);
+            }
+        );
+
+        return unsubscribe;
+    }, []);
+
+    const productImageMap = useMemo(() => {
+        const map = {};
+        catalogProducts.forEach((item) => {
+            map[item.id] = item.thumbnail || item.images?.[0] || "";
+        });
+        return map;
+    }, [catalogProducts]);
 
     // --------------------------------------------------
     // FETCH SECTION FROM BACKEND
@@ -466,9 +486,11 @@ export default function ViewSection() {
     // REMOVE PRODUCT
     // --------------------------------------------------
     const handleRemoveProduct = async (product) => {
-        const confirmed = window.confirm(
-            `Remove "${product.productName}" from this section?`
-        );
+        const confirmed = await confirm({
+            title: "Remove Product",
+            message: `Remove "${product.productName}" from this section?`,
+            confirmLabel: "Remove",
+        });
 
         if (!confirmed) return;
 
@@ -502,22 +524,33 @@ export default function ViewSection() {
 
         {/* PAGE HEADER */}
         <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm sm:px-7">
-            <div className="min-w-0">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">
-                    Section Management
-                </p>
-
-                <h2 className="mt-2 break-words text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                    {loadingSection
-                        ? "Loading section..."
-                        : section?.sectionName || "Section"}
-                </h2>
-
-                {section && (
-                    <p className="mt-2 text-sm text-slate-500">
-                        Display order: {section.order}
+            <div className="flex min-w-0 items-start gap-3 sm:items-center">
+                <button
+                    type="button"
+                    onClick={() => navigate("/section")}
+                    aria-label="Back to sections"
+                    title="Back to sections"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600"
+                >
+                    <ArrowLeft size={18} />
+                </button>
+                <div className="min-w-0">
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">
+                        Section Management
                     </p>
-                )}
+
+                    <h2 className="mt-2 break-words text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                        {loadingSection
+                            ? "Loading section..."
+                            : section?.sectionName || "Section"}
+                    </h2>
+
+                    {section && (
+                        <p className="mt-2 text-sm text-slate-500">
+                            Display order: {section.order}
+                        </p>
+                    )}
+                </div>
             </div>
 
             <button
@@ -626,6 +659,9 @@ export default function ViewSection() {
                                     excludeIds={products.map(
                                         (product) => product.id
                                     )}
+                                    allProducts={catalogProducts}
+                                    loading={loadingCatalog}
+                                    error={catalogError}
                                 />
                             </div>
 
@@ -732,6 +768,8 @@ export default function ViewSection() {
                                                 <td className="px-4 py-3">
                                                     <ProductThumbnail
                                                         productId={product.id}
+                                                        resolvedImage={productImageMap[product.id]}
+                                                        catalogLoading={loadingCatalog}
                                                     />
                                                 </td>
 
@@ -814,41 +852,44 @@ export default function ViewSection() {
 
 // =====================================================
 // PRODUCT THUMBNAIL
-// Resolves the image from the actual product document.
+// Resolves the image from the shared catalog map, with single-doc fallback.
 // =====================================================
-function ProductThumbnail({ productId }) {
-    const [image, setImage] = useState("");
-    const [loading, setLoading] = useState(true);
+function ProductThumbnail({ productId, resolvedImage, catalogLoading }) {
+    const [fallbackImage, setFallbackImage] = useState("");
+    const [loadingFallback, setLoadingFallback] = useState(false);
 
     useEffect(() => {
-        const unsubscribe = onSnapshot(
-            collection(db, "products"),
-            (snapshot) => {
-                const document = snapshot.docs.find(
-                    (item) => item.id === productId
-                );
+        if (catalogLoading || resolvedImage !== undefined || !productId) {
+            return undefined;
+        }
 
-                if (document) {
-                    const product = document.data();
-
-                    setImage(
-                        product.thumbnail || product.images?.[0] || ""
-                    );
+        let active = true;
+        setLoadingFallback(true);
+        getDoc(doc(db, "products", productId))
+            .then((docSnap) => {
+                if (!active) return;
+                if (docSnap.exists()) {
+                    const product = docSnap.data();
+                    setFallbackImage(product.thumbnail || product.images?.[0] || "");
                 } else {
-                    setImage("");
+                    setFallbackImage("");
                 }
+            })
+            .catch((err) => {
+                console.error("Product image fetch error:", err);
+                if (active) setFallbackImage("");
+            })
+            .finally(() => {
+                if (active) setLoadingFallback(false);
+            });
 
-                setLoading(false);
-            },
-            (error) => {
-                console.error("Product image fetch error:", error);
-                setImage("");
-                setLoading(false);
-            }
-        );
+        return () => {
+            active = false;
+        };
+    }, [productId, resolvedImage, catalogLoading]);
 
-        return unsubscribe;
-    }, [productId]);
+    const image = resolvedImage !== undefined ? resolvedImage : fallbackImage;
+    const loading = catalogLoading || loadingFallback;
 
     return (
         <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-100">

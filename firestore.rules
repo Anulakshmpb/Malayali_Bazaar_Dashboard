@@ -1,14 +1,65 @@
 rules_version = '2';
 
+// Cloud Firestore Security Rules for malayali-bazaar (named "default" database)
+// Note: Prototype hardened rules — review and test with Firebase Emulator Suite
+// before deploying to production.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper: Checks if the caller is an Admin via auth claim OR entry in adminUsers collection
+    // ==========================================
+    // Helper Functions
+    // ==========================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdminRecordActive(adminData) {
+      return !('status' in adminData) || adminData.status == 'active';
+    }
+
+    // Active admin via adminUsers record (authoritative when present) or admin custom claim
     function isAdmin() {
-      return request.auth != null && (
-        request.auth.token.admin == true ||
-        exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid))
+      return isAuthenticated() && (
+        (
+          exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid)) &&
+          isAdminRecordActive(get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data)
+        ) ||
+        (
+          !exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid)) &&
+          request.auth.token.admin == true
+        )
       );
+    }
+
+    function isValidSelfUserCreate(userId) {
+      return (!('uid' in request.resource.data) || request.resource.data.uid == userId) &&
+        (!('isActive' in request.resource.data) || request.resource.data.isActive == true) &&
+        !request.resource.data.keys().hasAny([
+          'isBlocked',
+          'role',
+          'usedPromoCodesCount',
+          'promoCodeUsage',
+          'usedPromoCodes',
+          'lastPromoUsed'
+        ]);
+    }
+
+    function areProtectedUserFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'uid',
+        'isActive',
+        'isBlocked',
+        'role',
+        'usedPromoCodesCount',
+        'promoCodeUsage',
+        'usedPromoCodes',
+        'lastPromoUsed',
+        'createdAt'
+      ]);
     }
 
     // ==========================================
@@ -20,6 +71,11 @@ service cloud.firestore {
     }
 
     match /brand/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /brands/{id} {
       allow read: if true;
       allow write: if isAdmin();
     }
@@ -42,6 +98,10 @@ service cloud.firestore {
     match /products/{id} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    match /product_test/{id} {
+      allow read, write: if isAdmin();
     }
 
     match /sections/{id} {
@@ -90,16 +150,30 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // Admin & Permissions Management
+    // Admin & Permissions Management (Restricted)
     // ==========================================
     match /permissions/{id} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if isAdmin();
     }
 
     match /adminUsers/{id} {
-      allow read: if true;
+      // Admins can read all admin records; authenticated users can read only their own lookup record
+      allow read: if isAdmin() || (
+        isAuthenticated() &&
+        (request.auth.uid == id || resource.data.uid == request.auth.uid)
+      );
       allow write: if isAdmin();
+    }
+
+    // ==========================================
+    // Promocodes (Server-validated via placeOrder & validatePromoCode)
+    // ==========================================
+    match /promocodes/{id} {
+      allow read, write: if isAdmin();
+
+      match /{document=**} {
+        allow read, write: if isAdmin();
+      }
     }
 
     // ==========================================
@@ -120,7 +194,6 @@ service cloud.firestore {
     // ==========================================
     // Analytics & Financial Reporting Collections
     // ==========================================
-    // High-level KPI summaries (/analytics/overview, /analytics/products)
     match /analytics/{id} {
       allow read, write: if isAdmin();
 
@@ -129,7 +202,6 @@ service cloud.firestore {
       }
     }
 
-    // Daily & Monthly performance rollups (/analytics_time_series/daily_*, monthly_*)
     match /analytics_time_series/{id} {
       allow read, write: if isAdmin();
 
@@ -138,7 +210,6 @@ service cloud.firestore {
       }
     }
 
-    // Product-wise sales performance
     match /analytics_products/{id} {
       allow read, write: if isAdmin();
 
@@ -147,7 +218,6 @@ service cloud.firestore {
       }
     }
 
-    // Financial debtor & customer ledger records
     match /user_ledgers/{id} {
       allow read, write: if isAdmin();
 
@@ -156,12 +226,10 @@ service cloud.firestore {
       }
     }
 
-    // Ledger payment transactions and receipts
     match /ledger_payments/{id} {
       allow read, write: if isAdmin();
     }
 
-    // System configurations and auto-increment counters
     match /configurations/{id} {
       allow read, write: if isAdmin();
     }
@@ -171,13 +239,14 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // Orders
+    // Orders (Created via placeOrder Cloud Function; Admins manage status)
     // ==========================================
     match /orders/{orderId} {
-      // Admins have full access; Customers can read their own orders and place new orders
-      allow read: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
-      allow create: if isAdmin() || (request.auth != null && request.resource.data.userId == request.auth.uid);
-      allow update, delete: if isAdmin();
+      allow read: if isAdmin() || (
+        isAuthenticated() &&
+        (resource.data.userId == request.auth.uid || resource.data.customerId == request.auth.uid)
+      );
+      allow create, update, delete: if isAdmin();
 
       match /{document=**} {
         allow read, write: if isAdmin();
@@ -185,13 +254,30 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // Users: own document and all nested subcollections
+    // Users: own profile & safe subcollections
     // ==========================================
     match /users/{userId} {
-      allow read, write: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAdmin() || (isOwner(userId) && isValidSelfUserCreate(userId));
+      allow update: if isAdmin() || (isOwner(userId) && areProtectedUserFieldsUnchanged());
+      allow delete: if isAdmin();
 
-      match /{document=**} {
-        allow read, write: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+      match /used_promocodes/{docId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isAdmin();
+      }
+
+      match /notifications/{notifId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow update: if isAdmin() || (
+          isOwner(userId) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'read', 'readAt'])
+        );
+        allow create, delete: if isAdmin();
+      }
+
+      match /{subcollection}/{document=**} {
+        allow read, write: if (subcollection != 'used_promocodes' && subcollection != 'notifications' && isOwner(userId)) || isAdmin();
       }
     }
 

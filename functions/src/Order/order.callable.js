@@ -1,10 +1,16 @@
 /* eslint-disable max-len */
 import {callableWrapper} from "../../shared/callable.wrapper.js";
-import {validatePlaceOrder, validateCheckPromoCode} from "./order.validation.js";
+import {requireActiveAdmin, fail} from "../../shared/utils.js";
+import {
+  validatePlaceOrder,
+  validateCheckPromoCode,
+  validateUpdateOrderStatus,
+} from "./order.validation.js";
 import {
   placeOrderService,
   postOrderTasks,
   validatePromoCodeService,
+  updateOrderStatusService,
 } from "./order.service.js";
 import {logInfo, logError} from "../../shared/logger.js";
 
@@ -33,10 +39,8 @@ export const placeOrder = callableWrapper(async (req) => {
 
     logInfo(`Order placed successfully: ${result.orderId} for user ${req.auth.uid}`);
 
-    // Trigger non-blocking cart cleanup and admin notification
-    postOrderTasks(req.auth.uid, result).catch((err) => {
-      logError("Background post-order task warning:", {error: err.message});
-    });
+    // Await post-order tasks before returning so Cloud Run does not throttle/freeze container mid-write
+    await postOrderTasks(req.auth.uid, result);
 
     return {
       success: true,
@@ -73,5 +77,31 @@ export const validatePromoCode = callableWrapper(async (req) => {
       success: false,
       message: error.message || "Failed to validate promo code.",
     };
+  }
+});
+
+export const updateOrderStatus = callableWrapper(async (req) => {
+  try {
+    const admin = await requireActiveAdmin(
+        req,
+        "Only active admins can update order status.",
+    );
+    const validation = validateUpdateOrderStatus(req.data || {});
+    if (!validation.success) {
+      return {
+        success: false,
+        message: validation.message,
+      };
+    }
+
+    const result = await updateOrderStatusService(admin.id, validation.data);
+    logInfo(`Order ${result.orderId} updated by ${admin.id}: ${result.status}`);
+    return {
+      success: true,
+      message: `Order status updated to ${result.status}.`,
+      data: result,
+    };
+  } catch (error) {
+    return fail(error, "Failed to update order status.");
   }
 });

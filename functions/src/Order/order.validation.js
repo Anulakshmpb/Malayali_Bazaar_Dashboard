@@ -64,8 +64,46 @@ export const validatePlaceOrder = (data = {}) => {
   };
 };
 
+export const ORDER_STATUSES = [
+  "New",
+  "Processing",
+  "Dispatch",
+  "Out of Delivery",
+  "Delivered",
+  "Cancelled",
+];
+
+export const PAYMENT_STATUSES = ["Pending", "Partial", "Paid", "Failed"];
+
+export const updateOrderStatusSchema = Joi.object({
+  orderDocId: Joi.string().trim().required(),
+  status: Joi.string().trim().valid(...ORDER_STATUSES).optional(),
+  paymentStatus: Joi.string().trim().valid(...PAYMENT_STATUSES).optional(),
+  paidAmount: Joi.number().min(0).optional(),
+  note: Joi.string().trim().max(500).allow("", null).optional(),
+}).or("status", "paymentStatus", "paidAmount");
+
 export const validateCheckPromoCode = (data = {}) => {
   const {error, value} = validatePromoCodeInputSchema.validate(data, {
+    abortEarly: false,
+    stripUnknown: true,
+  });
+
+  if (error) {
+    return {
+      success: false,
+      message: error.details.map((item) => item.message).join(", "),
+    };
+  }
+
+  return {
+    success: true,
+    data: value,
+  };
+};
+
+export const validateUpdateOrderStatus = (data = {}) => {
+  const {error, value} = updateOrderStatusSchema.validate(data, {
     abortEarly: false,
     stripUnknown: true,
   });

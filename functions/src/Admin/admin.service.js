@@ -58,6 +58,7 @@ const addAdminUserService = async (data, req) => {
       });
       const uid = userRecord.uid;
       try {
+        await auth.setCustomUserClaims(uid, {admin: true});
         await db.collection("adminUsers").doc(uid).set({
           name,
           email,
@@ -148,6 +149,9 @@ const addAdminUserService = async (data, req) => {
       if (Object.keys(authUpdate).length > 0) {
         await auth.updateUser(id, authUpdate);
       }
+      if (current.status === "active") {
+        await auth.setCustomUserClaims(id, {admin: true});
+      }
       if (Object.keys(firestoreUpdate).length > 0) {
         firestoreUpdate.updatedAt = FieldValue.serverTimestamp();
         firestoreUpdate.updatedBy = req.auth.uid;
@@ -188,6 +192,8 @@ const addAdminUserService = async (data, req) => {
         };
       }
       await auth.updateUser(id, {disabled: true});
+      await auth.setCustomUserClaims(id, {admin: false});
+      await auth.revokeRefreshTokens(id);
       await adminRef.update({
         status: "removed",
         updatedAt: FieldValue.serverTimestamp(),

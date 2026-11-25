@@ -13,7 +13,7 @@ importScripts(
 );
 
 firebase.initializeApp({
-    apiKey: "YOUR_FIREBASE_API_KEY",
+    apiKey: "AIzaSyCjYhjzAakevVHayfaoZz5RNTzCIY2ffZA",
     authDomain: "malayali-bazaar.firebaseapp.com",
     projectId: "malayali-bazaar",
     storageBucket: "malayali-bazaar.firebasestorage.app",
