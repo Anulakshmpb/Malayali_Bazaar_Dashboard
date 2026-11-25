@@ -8,7 +8,7 @@ import {
   Phone,
   FileText,
   Printer,
-  IndianRupee,
+  Euro,
   CreditCard,
   X,
   ShoppingBag,
@@ -22,16 +22,11 @@ import {
   Download,
   ReceiptText,
 } from "lucide-react";
-import { doc, onSnapshot, collection, query, where } from "firebase/firestore";
+import { doc, onSnapshot, collection, query, where, limit } from "firebase/firestore";
 import { db, app } from "../../Config/Firebase";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { useToast } from "../../Shared/hooks/ToastContext";
-
-const formatCurrency = (value) =>
-  `₹${Number(value || 0).toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+import { formatCurrency } from "../../Shared/utils/formatters";
 
 const formatDate = (value) => {
   if (!value) return "—";
@@ -45,7 +40,7 @@ const formatDate = (value) => {
 
   if (Number.isNaN(date.getTime())) return "—";
 
-  return date.toLocaleDateString("en-IN", {
+  return date.toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -62,7 +57,7 @@ const formatDateTime = (value) => {
 
   if (Number.isNaN(date.getTime())) return "—";
 
-  return date.toLocaleString("en-IN", {
+  return date.toLocaleString("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -173,11 +168,7 @@ export default function ViewLedger() {
             id: docSnap.id,
             name: data.name || "Customer",
             mobile: data.phone || data.mobile || "—",
-            email:
-              data.email ||
-              `${(data.name || "customer")
-                .toLowerCase()
-                .replace(/[^a-z0-9]/g, "")}@example.com`,
+            email: data.email || "",
             orders: Number(data.orders || 0),
             paidAmount: Number(data.paidAmount || 0),
             recievableAmount: Number(
@@ -228,7 +219,7 @@ export default function ViewLedger() {
         paidAmount: Number(data.paidAmount || 0),
         paymentStatus:
           data.paymentStatus ||
-          (data.status === "Delivered" ? "Paid" : "Partial"),
+          (data.status === "Delivered" ? "Paid" : "Pending"),
       };
     };
 
@@ -241,7 +232,7 @@ export default function ViewLedger() {
       setSales(Array.from(map.values()));
     };
 
-    const q1 = query(collection(db, "orders"), where("customerId", "==", id));
+    const q1 = query(collection(db, "orders"), where("customerId", "==", id), limit(200));
     const unsub1 = onSnapshot(
       q1,
       (snap) => {
@@ -251,7 +242,7 @@ export default function ViewLedger() {
       (err) => console.warn("Customer orders query warning:", err.message)
     );
 
-    const q2 = query(collection(db, "orders"), where("userId", "==", id));
+    const q2 = query(collection(db, "orders"), where("userId", "==", id), limit(200));
     const unsub2 = onSnapshot(
       q2,
       (snap) => {
@@ -271,7 +262,7 @@ export default function ViewLedger() {
   useEffect(() => {
     if (!id) return;
 
-    const paymentsRef = collection(db, "user_ledgers", id, "payments");
+    const paymentsRef = query(collection(db, "user_ledgers", id, "payments"), limit(200));
     const unsubscribePayments = onSnapshot(
       paymentsRef,
       (snapshot) => {
@@ -409,7 +400,8 @@ export default function ViewLedger() {
     const itemsHtml = (sale.items || [])
       .map((item, index) => {
         const quantity = Number(item.quantity || item.cartQty || 1);
-        const rate = Number(item.rate || item.offerPrice || 0);
+        const rate = Number(item.price ?? item.rate ?? item.offerPrice ?? 0);
+        const lineTotal = Number(item.total ?? quantity * rate);
 
         return `
           <tr>
@@ -417,7 +409,7 @@ export default function ViewLedger() {
             <td>${escapeHtml(item.productName || "Product")}</td>
             <td class="center">${quantity}</td>
             <td class="right">${formatCurrency(rate)}</td>
-            <td class="right">${formatCurrency(quantity * rate)}</td>
+            <td class="right">${formatCurrency(lineTotal)}</td>
           </tr>
         `;
       })
@@ -518,7 +510,7 @@ export default function ViewLedger() {
       <body>
         <div class="header">
           <div>
-            <div class="brand">CHEFCO</div>
+            <div class="brand">Malayali Bazaar</div>
             <p class="muted">Customer Sales Invoice</p>
           </div>
           <div style="text-align:right">
@@ -696,7 +688,7 @@ export default function ViewLedger() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-3 sm:min-w-[310px]">
+              <div className="grid grid-cols-2 gap-3 sm:min-w-[310px] sm:grid-cols-4">
                 <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3.5">
                   <div className="flex items-center gap-2 text-slate-700">
                     <ShoppingBag size={15} />
@@ -726,7 +718,7 @@ export default function ViewLedger() {
                 </div>
                 <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3.5">
                   <div className="flex items-center gap-2 text-slate-500">
-                    <IndianRupee size={15} />
+                    <Euro size={15} />
                     <span className="text-xs font-medium">Payable Due</span>
                   </div>
                   <p className="mt-2 text-xl font-bold text-slate-900">
@@ -1303,7 +1295,7 @@ export default function ViewLedger() {
                   </label>
 
                   <div className="relative">
-                    <IndianRupee
+                    <Euro
                       size={17}
                       className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
                     />
@@ -1441,10 +1433,10 @@ export default function ViewLedger() {
                     {Number(paymentAmount) > totalOutstanding &&
                       totalOutstanding > 0 && (
                         <p className="mt-1.5 text-xs leading-5 text-slate-500">
-                          Excess ₹
-                          {(
+                          Excess{" "}
+                          {formatCurrency(
                             Number(paymentAmount) - totalOutstanding
-                          ).toLocaleString("en-IN")}{" "}
+                          )}{" "}
                           will be added to customer's payable/credit balance.
                         </p>
                       )}

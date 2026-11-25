@@ -3,6 +3,7 @@ import {FieldValue} from "firebase-admin/firestore";
 import Joi from "joi";
 import {callableWrapper} from "../../shared/callable.wrapper.js";
 import {db} from "../../shared/config.js";
+import {requireActiveAdmin} from "../../shared/utils.js";
 import {logInfo, logError} from "../../shared/logger.js";
 
 const paymentSchema = Joi.object({
@@ -23,6 +24,8 @@ const paymentSchema = Joi.object({
  * and updates order payment status if linked to a bill.
  */
 export const recordCustomerPayment = callableWrapper(async (req) => {
+  await requireActiveAdmin(req);
+
   const {error, value} = paymentSchema.validate(req.data || {}, {
     abortEarly: false,
     stripUnknown: true,
@@ -39,8 +42,18 @@ export const recordCustomerPayment = callableWrapper(async (req) => {
 
   try {
     const result = await db.runTransaction(async (transaction) => {
+      // All transaction reads must happen before any writes
       const customerRef = db.collection("user_ledgers").doc(customerId);
       const customerDoc = await transaction.get(customerRef);
+
+      let userDoc = null;
+      if (!customerDoc.exists) {
+        const userRef = db.collection("users").doc(customerId);
+        userDoc = await transaction.get(userRef);
+      }
+
+      const orderRef = orderId ? db.collection("orders").doc(orderId) : null;
+      const orderDoc = orderRef ? await transaction.get(orderRef) : null;
 
       let customerData = {};
       let customerName = "Customer";
@@ -50,15 +63,10 @@ export const recordCustomerPayment = callableWrapper(async (req) => {
         customerData = customerDoc.data();
         customerName = customerData.name || "Customer";
         customerPhone = customerData.phone || customerData.mobile || "";
-      } else {
-        // Look up customer info in users collection if ledger doc doesn't exist yet
-        const userRef = db.collection("users").doc(customerId);
-        const userDoc = await transaction.get(userRef);
-        if (userDoc.exists) {
-          const u = userDoc.data();
-          customerName = u.name || u.displayName || "Customer";
-          customerPhone = u.phone || u.phoneNumber || "";
-        }
+      } else if (userDoc && userDoc.exists) {
+        const u = userDoc.data();
+        customerName = u.name || u.displayName || "Customer";
+        customerPhone = u.phone || u.phoneNumber || "";
       }
 
       const currentReceivable = Number(
@@ -67,34 +75,28 @@ export const recordCustomerPayment = callableWrapper(async (req) => {
       const currentPayable = Number(customerData.payableAmount ?? 0);
       const currentPaid = Number(customerData.paidAmount ?? 0);
 
-      let newReceivable = currentReceivable;
-      let newPayable = currentPayable;
+      const hasLinkedOrder = Boolean(orderDoc && orderDoc.exists);
+      const payableReduction = hasLinkedOrder ? 0 : Math.min(currentPayable, amount);
+      const newPayable = hasLinkedOrder ?
+        currentPayable :
+        Math.max(0, currentPayable - amount);
+      const newPaidAmount = hasLinkedOrder ? currentPaid : currentPaid + amount;
+      const newReceivable = currentReceivable;
 
-      if (newReceivable > 0) {
-        if (amount >= newReceivable) {
-          newPayable += (amount - newReceivable);
-          newReceivable = 0;
-        } else {
-          newReceivable -= amount;
-        }
-      } else {
-        newPayable += amount;
-      }
-
-      const newPaidAmount = currentPaid + amount;
-
-      // 1. Update customer ledger record
-      transaction.set(customerRef, {
+      // 1. Update customer ledger metadata (and balances only when unlinked to an order;
+      //    order-linked payments update ledger & analytics balances via onOrderAnalyticsTrigger)
+      const ledgerUpdate = {
         name: customerName,
         phone: customerPhone,
-        paidAmount: newPaidAmount,
-        receivableAmount: newReceivable,
-        recievableAmount: newReceivable,
-        payableAmount: newPayable,
         lastPaymentAt: FieldValue.serverTimestamp(),
         lastPaymentAmount: amount,
         updatedAt: FieldValue.serverTimestamp(),
-      }, {merge: true});
+      };
+      if (!hasLinkedOrder) {
+        ledgerUpdate.paidAmount = newPaidAmount;
+        ledgerUpdate.payableAmount = newPayable;
+      }
+      transaction.set(customerRef, ledgerUpdate, {merge: true});
 
       // 2. Record payment in customer subcollection: /user_ledgers/{customerId}/payments
       const paymentSubRef = customerRef.collection("payments").doc();
@@ -122,33 +124,35 @@ export const recordCustomerPayment = callableWrapper(async (req) => {
       const globalPaymentRef = db.collection("ledger_payments").doc(paymentSubRef.id);
       transaction.set(globalPaymentRef, paymentRecord);
 
-      // 4. Update order payment status if linked to a bill
-      if (orderId) {
-        const orderRef = db.collection("orders").doc(orderId);
-        const orderDoc = await transaction.get(orderRef);
-        if (orderDoc.exists) {
-          const orderData = orderDoc.data();
-          const orderTotal = Number(orderData.totalAmount || orderData.total || 0);
-          const orderPaid = Number(orderData.paidAmount || 0) + amount;
-          const isFullyPaid = orderPaid >= orderTotal;
+      // 4. Update order payment status if linked to an order;
+      //    onOrderAnalyticsTrigger will reconcile user_ledgers and analytics/overview
+      if (hasLinkedOrder) {
+        const orderData = orderDoc.data();
+        const orderTotal = Number(orderData.totalAmount || orderData.total || 0);
+        const existingIsPaid = String(orderData.paymentStatus || "").toLowerCase() === "paid";
+        const existingOrderPaid = Number(
+            orderData.paidAmount ?? (existingIsPaid ? orderTotal : 0),
+        );
+        const orderPaid = existingOrderPaid + amount;
+        const isFullyPaid = orderPaid >= orderTotal;
 
-          transaction.set(orderRef, {
-            paidAmount: orderPaid,
-            paymentStatus: isFullyPaid ? "Paid" : "Partial",
-            lastPaymentAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-          }, {merge: true});
-        }
-      }
-
-      // 5. Update global overview total receivables
-      const receivableReduction = currentReceivable - newReceivable;
-      if (receivableReduction > 0) {
-        const overviewRef = db.collection("analytics").doc("overview");
-        transaction.set(overviewRef, {
-          totalReceivables: FieldValue.increment(-1 * receivableReduction),
+        transaction.set(orderRef, {
+          paidAmount: orderPaid,
+          paymentStatus: isFullyPaid ? "Paid" : "Partial",
+          lastPaymentAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
+      } else {
+        // 5. Update global overview for unlinked payments only
+        const overviewRef = db.collection("analytics").doc("overview");
+        const overviewUpdate = {
+          totalPaid: FieldValue.increment(amount),
+          updatedAt: FieldValue.serverTimestamp(),
+        };
+        if (payableReduction > 0) {
+          overviewUpdate.totalReceivables = FieldValue.increment(-1 * payableReduction);
+        }
+        transaction.set(overviewRef, overviewUpdate, {merge: true});
       }
 
       return {
@@ -159,11 +163,11 @@ export const recordCustomerPayment = callableWrapper(async (req) => {
       };
     });
 
-    logInfo(`Payment of ₹${amount} recorded for customer ${customerId}`);
+    logInfo(`Payment of €${amount} recorded for customer ${customerId}`);
 
     return {
       success: true,
-      message: `Payment of ₹${amount.toLocaleString("en-IN")} recorded successfully`,
+      message: `Payment of €${amount.toLocaleString("en-IE", {minimumFractionDigits: 2, maximumFractionDigits: 2})} recorded successfully`,
       data: result,
     };
   } catch (err) {

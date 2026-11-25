@@ -26,8 +26,9 @@ import {
     doc,
     getDoc,
     getDocs,
-    setDoc,
     collection,
+    query,
+    limit,
     onSnapshot,
     addDoc,
     updateDoc,
@@ -147,6 +148,10 @@ const DeliveryCharges = () => {
     const functions = useMemo(() => getFunctions(app, "europe-west1"), []);
     const manageDeliveryPlaceCallable = useMemo(
         () => httpsCallable(functions, "manageDeliveryPlace"),
+        [functions]
+    );
+    const manageDeliverySettingsCallable = useMemo(
+        () => httpsCallable(functions, "manageDeliverySettings"),
         [functions]
     );
 
@@ -302,7 +307,7 @@ const DeliveryCharges = () => {
 
         // Real-time synchronization
         const unsubscribe = onSnapshot(
-            collection(db, "delivery_places"),
+            query(collection(db, "delivery_places"), limit(500)),
             (snapshot) => {
                 if (!snapshot.empty) {
                     const list = snapshot.docs
@@ -473,14 +478,12 @@ const DeliveryCharges = () => {
                 status: Boolean(formData.status),
             };
 
-            if (formData.delivery_type === "normal") {
-                await setDoc(doc(db, "delivery_settings", "normal"), payload, { merge: true });
-            } else {
-                await setDoc(
-                    doc(db, "delivery_settings", "postal"),
-                    { [formData.delivery_type]: payload },
-                    { merge: true }
-                );
+            const res = await manageDeliverySettingsCallable({
+                action: "update",
+                fields: payload,
+            });
+            if (!res.data?.success) {
+                throw new Error(res.data?.message || "Failed to save delivery settings.");
             }
 
             showToast("Delivery settings saved successfully.", "success");
@@ -488,7 +491,7 @@ const DeliveryCharges = () => {
             fetchCharges();
         } catch (err) {
             console.error("Save failed:", err);
-            showToast("Failed to save delivery settings.", "error");
+            showToast(err.message || "Failed to save delivery settings.", "error");
         } finally {
             setSaving(false);
         }
@@ -501,19 +504,20 @@ const DeliveryCharges = () => {
         );
 
         try {
-            if (item.id === "normal") {
-                await setDoc(doc(db, "delivery_settings", "normal"), { status: nextStatus }, { merge: true });
-            } else {
-                await setDoc(
-                    doc(db, "delivery_settings", "postal"),
-                    { [item.id]: { status: nextStatus } },
-                    { merge: true }
-                );
+            const res = await manageDeliverySettingsCallable({
+                action: "update",
+                fields: {
+                    delivery_type: item.id,
+                    status: nextStatus,
+                },
+            });
+            if (!res.data?.success) {
+                throw new Error(res.data?.message || "Failed to update status.");
             }
             showToast(`${item.name} status updated.`, "success");
         } catch (err) {
             console.error("Status update error:", err);
-            showToast("Failed to update status.", "error");
+            showToast(err.message || "Failed to update status.", "error");
             fetchCharges();
         }
     };
@@ -788,20 +792,18 @@ const DeliveryCharges = () => {
                     <button
                         type="button"
                         onClick={() => setActiveMainTab("charges")}
-                        className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-bold transition ${
-                            activeMainTab === "charges"
-                                ? "border-primary text-primary"
-                                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
-                        }`}
+                        className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-bold transition ${activeMainTab === "charges"
+                            ? "border-primary text-primary"
+                            : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                            }`}
                     >
                         <FaEuroSign />
                         Delivery Pricing & Rules
                         <span
-                            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                                activeMainTab === "charges"
-                                    ? "bg-primary/10 text-primary"
-                                    : "bg-gray-100 text-gray-600"
-                            }`}
+                            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${activeMainTab === "charges"
+                                ? "bg-primary/10 text-primary"
+                                : "bg-gray-100 text-gray-600"
+                                }`}
                         >
                             {charges.length}
                         </span>
@@ -813,20 +815,18 @@ const DeliveryCharges = () => {
                             setActiveMainTab("places");
                             fetchPlaces();
                         }}
-                        className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-bold transition ${
-                            activeMainTab === "places"
-                                ? "border-primary text-primary"
-                                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
-                        }`}
+                        className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-bold transition ${activeMainTab === "places"
+                            ? "border-primary text-primary"
+                            : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                            }`}
                     >
                         <FaMapMarkerAlt />
                         Places of Germany (5 km & Monthly Van)
                         <span
-                            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                                activeMainTab === "places"
-                                    ? "bg-primary/10 text-primary"
-                                    : "bg-gray-100 text-gray-600"
-                            }`}
+                            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${activeMainTab === "places"
+                                ? "bg-primary/10 text-primary"
+                                : "bg-gray-100 text-gray-600"
+                                }`}
                         >
                             {places.length}
                         </span>
@@ -950,7 +950,7 @@ const DeliveryCharges = () => {
                                     },
                                     {
                                         key: "minimum_order_amount",
-                                        header: "Free Delivery Minimum",
+                                        header: "Minimum Order Amount",
                                         sortable: true,
                                         render: (item) => (
                                             <span className="font-semibold text-gray-900">
@@ -960,10 +960,10 @@ const DeliveryCharges = () => {
                                     },
                                     {
                                         key: "pricing_rule",
-                                        header: "Pricing Rule",
+                                        header: "Order Rule",
                                         render: (item) => (
                                             <span className="text-xs text-gray-500">
-                                                &lt; {formatAmount(item.minimum_order_amount)}: {formatAmount(item.delivery_charge)} | &ge; {formatAmount(item.minimum_order_amount)}: Free
+                                                Min order {formatAmount(item.minimum_order_amount)} | Fee: {formatAmount(item.delivery_charge)}
                                             </span>
                                         ),
                                     },
@@ -975,16 +975,14 @@ const DeliveryCharges = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => toggleStatus(item)}
-                                                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                                                    item.status
-                                                        ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                                                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                                                }`}
+                                                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${item.status
+                                                    ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                                    : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                                                    }`}
                                             >
                                                 <span
-                                                    className={`h-1.5 w-1.5 rounded-full ${
-                                                        item.status ? "bg-emerald-500" : "bg-gray-400"
-                                                    }`}
+                                                    className={`h-1.5 w-1.5 rounded-full ${item.status ? "bg-emerald-500" : "bg-gray-400"
+                                                        }`}
                                                 />
                                                 {item.status ? "Active" : "Inactive"}
                                             </button>
@@ -1080,22 +1078,20 @@ const DeliveryCharges = () => {
                                         <button
                                             type="button"
                                             onClick={() => setPlacesDeliveryFilter("all")}
-                                            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
-                                                placesDeliveryFilter === "all"
-                                                    ? "bg-white text-gray-900 shadow-sm"
-                                                    : "text-gray-500 hover:text-gray-800"
-                                            }`}
+                                            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${placesDeliveryFilter === "all"
+                                                ? "bg-white text-gray-900 shadow-sm"
+                                                : "text-gray-500 hover:text-gray-800"
+                                                }`}
                                         >
                                             All Places ({places.length})
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setPlacesDeliveryFilter("normal")}
-                                            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
-                                                placesDeliveryFilter === "normal"
-                                                    ? "bg-emerald-600 text-white shadow-sm"
-                                                    : "text-emerald-700 hover:bg-emerald-50"
-                                            }`}
+                                            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${placesDeliveryFilter === "normal"
+                                                ? "bg-emerald-600 text-white shadow-sm"
+                                                : "text-emerald-700 hover:bg-emerald-50"
+                                                }`}
                                         >
                                             <FaTruck size={12} />
                                             Normal Delivery (5 km) ({normalPlacesCount})
@@ -1103,11 +1099,10 @@ const DeliveryCharges = () => {
                                         <button
                                             type="button"
                                             onClick={() => setPlacesDeliveryFilter("monthly_van")}
-                                            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
-                                                placesDeliveryFilter === "monthly_van"
-                                                    ? "bg-blue-600 text-white shadow-sm"
-                                                    : "text-blue-700 hover:bg-blue-50"
-                                            }`}
+                                            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${placesDeliveryFilter === "monthly_van"
+                                                ? "bg-blue-600 text-white shadow-sm"
+                                                : "text-blue-700 hover:bg-blue-50"
+                                                }`}
                                         >
                                             <FaShippingFast size={12} />
                                             Monthly Van ({vanPlacesCount})
@@ -1168,8 +1163,8 @@ const DeliveryCharges = () => {
                                     placesDeliveryFilter === "normal"
                                         ? "Normal Delivery Places (Within 5 km)"
                                         : placesDeliveryFilter === "monthly_van"
-                                        ? "Monthly Van Delivery Places"
-                                        : "Places of Germany"
+                                            ? "Monthly Van Delivery Places"
+                                            : "Places of Germany"
                                 }
                                 subtitle={`Showing ${filteredPlaces.length} of ${places.length} places`}
                                 loading={placesLoading}
@@ -1181,11 +1176,10 @@ const DeliveryCharges = () => {
                                         render: (place) => (
                                             <div className="flex items-center gap-3">
                                                 <div
-                                                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-                                                        place.deliveryType === "normal"
-                                                            ? "bg-emerald-50 text-emerald-600"
-                                                            : "bg-blue-50 text-blue-600"
-                                                    }`}
+                                                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${place.deliveryType === "normal"
+                                                        ? "bg-emerald-50 text-emerald-600"
+                                                        : "bg-blue-50 text-blue-600"
+                                                        }`}
                                                 >
                                                     <FaCity size={15} />
                                                 </div>
@@ -1254,16 +1248,14 @@ const DeliveryCharges = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => togglePlaceStatus(place)}
-                                                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                                                    place.status
-                                                        ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                                                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                                                }`}
+                                                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${place.status
+                                                    ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                                    : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                                                    }`}
                                             >
                                                 <span
-                                                    className={`h-1.5 w-1.5 rounded-full ${
-                                                        place.status ? "bg-emerald-500" : "bg-gray-400"
-                                                    }`}
+                                                    className={`h-1.5 w-1.5 rounded-full ${place.status ? "bg-emerald-500" : "bg-gray-400"
+                                                        }`}
                                                 />
                                                 {place.status ? "Active" : "Inactive"}
                                             </button>
@@ -1388,11 +1380,10 @@ const DeliveryCharges = () => {
                                                 value={formData.price_increase_percentage}
                                                 onChange={handleInputChange}
                                                 placeholder="Enter price increase percentage"
-                                                className={`w-full rounded-xl border py-3 pl-10 pr-4 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-primary/10 ${
-                                                    errors.price_increase_percentage
-                                                        ? "border-red-400 focus:border-red-400"
-                                                        : "border-gray-200 focus:border-primary"
-                                                }`}
+                                                className={`w-full rounded-xl border py-3 pl-10 pr-4 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-primary/10 ${errors.price_increase_percentage
+                                                    ? "border-red-400 focus:border-red-400"
+                                                    : "border-gray-200 focus:border-primary"
+                                                    }`}
                                             />
                                         </div>
                                         {errors.price_increase_percentage && (
@@ -1419,11 +1410,10 @@ const DeliveryCharges = () => {
                                                 value={formData.delivery_charge}
                                                 onChange={handleInputChange}
                                                 placeholder="Enter delivery charge"
-                                                className={`w-full rounded-xl border py-3 pl-10 pr-4 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-primary/10 ${
-                                                    errors.delivery_charge
-                                                        ? "border-red-400 focus:border-red-400"
-                                                        : "border-gray-200 focus:border-primary"
-                                                }`}
+                                                className={`w-full rounded-xl border py-3 pl-10 pr-4 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-primary/10 ${errors.delivery_charge
+                                                    ? "border-red-400 focus:border-red-400"
+                                                    : "border-gray-200 focus:border-primary"
+                                                    }`}
                                             />
                                         </div>
                                         {errors.delivery_charge && (
@@ -1437,7 +1427,7 @@ const DeliveryCharges = () => {
                                             htmlFor="minimum_order_amount"
                                             className="mb-2 block text-sm font-semibold text-gray-700"
                                         >
-                                            Free Delivery Minimum (€) <span className="text-red-500">*</span>
+                                            Minimum Order Amount (€) <span className="text-red-500">*</span>
                                         </label>
                                         <div className="relative">
                                             <FaGift className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-gray-400" />
@@ -1450,11 +1440,10 @@ const DeliveryCharges = () => {
                                                 value={formData.minimum_order_amount}
                                                 onChange={handleInputChange}
                                                 placeholder="Enter minimum order amount"
-                                                className={`w-full rounded-xl border py-3 pl-10 pr-4 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-primary/10 ${
-                                                    errors.minimum_order_amount
-                                                        ? "border-red-400 focus:border-red-400"
-                                                        : "border-gray-200 focus:border-primary"
-                                                }`}
+                                                className={`w-full rounded-xl border py-3 pl-10 pr-4 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-primary/10 ${errors.minimum_order_amount
+                                                    ? "border-red-400 focus:border-red-400"
+                                                    : "border-gray-200 focus:border-primary"
+                                                    }`}
                                             />
                                         </div>
                                         {errors.minimum_order_amount && (
@@ -1491,14 +1480,12 @@ const DeliveryCharges = () => {
                                                     status: !prev.status,
                                                 }))
                                             }
-                                            className={`relative h-6 w-11 rounded-full transition ${
-                                                formData.status ? "bg-primary" : "bg-gray-300"
-                                            }`}
+                                            className={`relative h-6 w-11 rounded-full transition ${formData.status ? "bg-primary" : "bg-gray-300"
+                                                }`}
                                         >
                                             <span
-                                                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-all ${
-                                                    formData.status ? "left-[22px]" : "left-0.5"
-                                                }`}
+                                                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-all ${formData.status ? "left-[22px]" : "left-0.5"
+                                                    }`}
                                             />
                                         </button>
                                     </div>
@@ -1581,11 +1568,10 @@ const DeliveryCharges = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => handlePlaceDeliveryTypeSelect("normal")}
-                                                className={`flex items-center justify-center gap-2 rounded-xl border p-3 text-xs font-bold transition ${
-                                                    placeFormData.deliveryType === "normal"
-                                                        ? "border-emerald-600 bg-emerald-50 text-emerald-800 shadow-sm"
-                                                        : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                                                }`}
+                                                className={`flex items-center justify-center gap-2 rounded-xl border p-3 text-xs font-bold transition ${placeFormData.deliveryType === "normal"
+                                                    ? "border-emerald-600 bg-emerald-50 text-emerald-800 shadow-sm"
+                                                    : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                                                    }`}
                                             >
                                                 <FaTruck className={placeFormData.deliveryType === "normal" ? "text-emerald-600" : "text-gray-400"} />
                                                 Normal (Within 5 km)
@@ -1594,11 +1580,10 @@ const DeliveryCharges = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => handlePlaceDeliveryTypeSelect("monthly_van")}
-                                                className={`flex items-center justify-center gap-2 rounded-xl border p-3 text-xs font-bold transition ${
-                                                    placeFormData.deliveryType === "monthly_van"
-                                                        ? "border-blue-600 bg-blue-50 text-blue-800 shadow-sm"
-                                                        : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                                                }`}
+                                                className={`flex items-center justify-center gap-2 rounded-xl border p-3 text-xs font-bold transition ${placeFormData.deliveryType === "monthly_van"
+                                                    ? "border-blue-600 bg-blue-50 text-blue-800 shadow-sm"
+                                                    : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                                                    }`}
                                             >
                                                 <FaShippingFast className={placeFormData.deliveryType === "monthly_van" ? "text-blue-600" : "text-gray-400"} />
                                                 Monthly Van
@@ -1624,11 +1609,10 @@ const DeliveryCharges = () => {
                                                 setPlaceErrors((prev) => ({ ...prev, city: "" }));
                                             }}
                                             placeholder="e.g. Frankfurt am Main, München, Köln"
-                                            className={`w-full rounded-xl border px-3.5 py-2.5 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-primary/10 ${
-                                                placeErrors.city
-                                                    ? "border-red-400 focus:border-red-400"
-                                                    : "border-gray-200 focus:border-primary"
-                                            }`}
+                                            className={`w-full rounded-xl border px-3.5 py-2.5 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-primary/10 ${placeErrors.city
+                                                ? "border-red-400 focus:border-red-400"
+                                                : "border-gray-200 focus:border-primary"
+                                                }`}
                                         />
                                         {placeErrors.city && (
                                             <p className="mt-1 text-xs text-red-500">{placeErrors.city}</p>
@@ -1702,11 +1686,10 @@ const DeliveryCharges = () => {
                                                     setPlaceErrors((prev) => ({ ...prev, postalCode: "" }));
                                                 }}
                                                 placeholder="e.g. 60311 or 80331"
-                                                className={`w-full rounded-xl border py-2.5 pl-9 pr-4 font-mono text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-primary/10 ${
-                                                    placeErrors.postalCode
-                                                        ? "border-red-400 focus:border-red-400"
-                                                        : "border-gray-200 focus:border-primary"
-                                                }`}
+                                                className={`w-full rounded-xl border py-2.5 pl-9 pr-4 font-mono text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-primary/10 ${placeErrors.postalCode
+                                                    ? "border-red-400 focus:border-red-400"
+                                                    : "border-gray-200 focus:border-primary"
+                                                    }`}
                                             />
                                         </div>
                                         {placeErrors.postalCode && (
@@ -1760,14 +1743,12 @@ const DeliveryCharges = () => {
                                                     status: !prev.status,
                                                 }))
                                             }
-                                            className={`relative h-6 w-11 rounded-full transition ${
-                                                placeFormData.status ? "bg-primary" : "bg-gray-300"
-                                            }`}
+                                            className={`relative h-6 w-11 rounded-full transition ${placeFormData.status ? "bg-primary" : "bg-gray-300"
+                                                }`}
                                         >
                                             <span
-                                                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-all ${
-                                                    placeFormData.status ? "left-[22px]" : "left-0.5"
-                                                }`}
+                                                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-all ${placeFormData.status ? "left-[22px]" : "left-0.5"
+                                                    }`}
                                             />
                                         </button>
                                     </div>
@@ -1793,8 +1774,8 @@ const DeliveryCharges = () => {
                                         {placeSaving
                                             ? "Saving..."
                                             : editingPlaceId
-                                            ? "Update Place"
-                                            : "Save Place"}
+                                                ? "Update Place"
+                                                : "Save Place"}
                                     </button>
                                 </div>
                             </form>

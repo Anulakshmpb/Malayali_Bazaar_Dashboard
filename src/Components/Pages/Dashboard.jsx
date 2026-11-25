@@ -11,7 +11,7 @@ import {
     AlertCircle,
     UserX,
     MoreHorizontal,
-    IndianRupee,
+    Euro,
     FileText
 } from 'lucide-react';
 import { 
@@ -23,13 +23,10 @@ import {
     limit 
 } from 'firebase/firestore';
 import { db } from '../Config/Firebase';
+import { formatCurrency as sharedFormatCurrency, formatNumber } from '../Shared/utils/formatters';
 
 const formatCurrency = (val) =>
-    new Intl.NumberFormat("en-IN", {
-        style: "currency",
-        currency: "INR",
-        maximumFractionDigits: 0,
-    }).format(Number(val || 0));
+    sharedFormatCurrency(val, { maximumFractionDigits: 0 });
 
 export default function Dashboard() {
     const navigate = useNavigate();
@@ -110,7 +107,7 @@ export default function Dashboard() {
                         const data = docSnap.data();
                         return {
                             name: data.productName || data.name || docSnap.id,
-                            orders: `${Number(data.quantity || 0).toLocaleString("en-IN")} sold`,
+                            orders: `${formatNumber(data.quantity || 0)} sold`,
                             price: formatCurrency(data.revenue || 0),
                             image: data.image || data.thumbnail || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=200&h=200',
                         };
@@ -128,45 +125,70 @@ export default function Dashboard() {
         return () => unsubscribeProducts();
     }, []);
 
-    // Firestore listener: Low stock products
+    // Firestore listener: Low stock products (bounded to lowest-stock items)
     useEffect(() => {
-        const unsubscribeProductsStock = onSnapshot(
-            collection(db, "products"),
-            (snapshot) => {
-                if (!snapshot.empty) {
-                    const lowStockList = [];
-                    snapshot.docs.forEach((docSnap) => {
-                        const data = docSnap.data();
-                        const stock = Number(data.stock ?? data.productStock ?? 0);
-                        const threshold = Number(data.threshold ?? data.lowStockThreshold ?? 10);
-                        if (stock <= threshold) {
-                            lowStockList.push({
-                                name: data.productName || data.name || "Product",
-                                stock,
-                                threshold,
-                                image: Array.isArray(data.images) && data.images[0]
-                                    ? data.images[0]
-                                    : (data.productImage || 'https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&w=200&h=200'),
-                            });
-                        }
-                    });
+        let isMounted = true;
+        let primaryUnsub = null;
+        let fallbackUnsub = null;
 
-                    if (lowStockList.length > 0) {
-                        lowStockList.sort((a, b) => a.stock - b.stock);
-                        setLowStock(lowStockList.slice(0, 4));
-                    } else {
-                        setLowStock([]);
+        const handleStockSnapshot = (snapshot) => {
+            if (!isMounted) return;
+            if (!snapshot.empty) {
+                const lowStockList = [];
+                snapshot.docs.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    const stock = Number(data.stock ?? data.productStock ?? 0);
+                    const threshold = Number(data.threshold ?? data.lowStockThreshold ?? 10);
+                    if (stock <= threshold) {
+                        lowStockList.push({
+                            name: data.productName || data.name || "Product",
+                            stock,
+                            threshold,
+                            image: Array.isArray(data.images) && data.images[0]
+                                ? data.images[0]
+                                : (data.productImage || 'https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&w=200&h=200'),
+                        });
                     }
-                } else {
-                    setLowStock([]);
-                }
-            },
+                });
+
+                lowStockList.sort((a, b) => a.stock - b.stock);
+                setLowStock(lowStockList.slice(0, 4));
+            } else {
+                setLowStock([]);
+            }
+        };
+
+        const lowStockQuery = query(
+            collection(db, "products"),
+            orderBy("stock", "asc"),
+            limit(25)
+        );
+
+        primaryUnsub = onSnapshot(
+            lowStockQuery,
+            handleStockSnapshot,
             (error) => {
-                console.warn("Products stock query warning:", error.message);
+                console.warn("Low stock ordered query failed, falling back:", error.message);
+                if (typeof primaryUnsub === "function") {
+                    primaryUnsub();
+                    primaryUnsub = null;
+                }
+                if (!isMounted) return;
+                fallbackUnsub = onSnapshot(
+                    query(collection(db, "products"), limit(25)),
+                    handleStockSnapshot,
+                    (fallbackErr) => {
+                        console.warn("Products stock query warning:", fallbackErr.message);
+                    }
+                );
             }
         );
 
-        return () => unsubscribeProductsStock();
+        return () => {
+            isMounted = false;
+            if (typeof primaryUnsub === "function") primaryUnsub();
+            if (typeof fallbackUnsub === "function") fallbackUnsub();
+        };
     }, []);
 
     // Firestore listener: Debtors from user_ledgers
@@ -211,21 +233,21 @@ export default function Dashboard() {
     const stats = [
         {
             title: 'Total Orders',
-            value: Number(overview.totalOrders || 0).toLocaleString("en-IN"),
+            value: formatNumber(overview.totalOrders || 0),
             icon: ShoppingCart,
             trend: overview.trends?.orderGrowth || '+0.0%',
             isUp: !(overview.trends?.orderGrowth || '').startsWith('-'),
         },
         {
             title: 'Total Users',
-            value: Number(overview.totalUsers || 0).toLocaleString("en-IN"),
+            value: formatNumber(overview.totalUsers || 0),
             icon: Users,
             trend: overview.trends?.usersGrowth || '+0.0%',
             isUp: !(overview.trends?.usersGrowth || '').startsWith('-'),
         },
         {
             title: 'Total Products',
-            value: Number(overview.totalProducts || 0).toLocaleString("en-IN"),
+            value: formatNumber(overview.totalProducts || 0),
             icon: Package,
             trend: overview.trends?.productsGrowth || '+0.0%',
             isUp: !(overview.trends?.productsGrowth || '').startsWith('-'),
@@ -233,13 +255,13 @@ export default function Dashboard() {
         {
             title: 'Total Sales',
             value: formatCurrency(overview.totalRevenue),
-            icon: IndianRupee,
+            icon: Euro,
             trend: overview.trends?.revenueGrowth || '+0.0%',
             isUp: !(overview.trends?.revenueGrowth || '').startsWith('-'),
         },
         {
             title: 'Items Sold',
-            value: Number(overview.itemsSold || 0).toLocaleString("en-IN"),
+            value: formatNumber(overview.itemsSold || 0),
             icon: TrendingUp,
             trend: overview.trends?.unitsGrowth || '+0.0%',
             isUp: !(overview.trends?.unitsGrowth || '').startsWith('-'),

@@ -1,3 +1,4 @@
+import {HttpsError} from "firebase-functions/v2/https";
 import {db} from "../../shared/config.js";
 import {
   addAdminValidator,
@@ -5,39 +6,17 @@ import {
   addUserValidator,
 } from "./admin.validation.js";
 
-import {addAdminUserService} from "./admin.service.js";
-import {editPermissionsService} from "./admin.service.js";
+import {addAdminUserService, editPermissionsService} from "./admin.service.js";
 /* eslint-disable max-len */
 import {callableWrapper} from "../../shared/callable.wrapper.js";
+import {requireActiveAdmin} from "../../shared/utils.js";
 
 // ======================================================
 // MANAGE ADMIN USERS
 // ======================================================
 
 const manageAdmin = callableWrapper(async (req) => {
-  if (!req.auth?.uid) {
-    return {
-      success: false,
-      error: "Authentication is required.",
-    };
-  }
-  const callerDoc = await db.collection("adminUsers").doc(req.auth.uid).get();
-  if (!callerDoc.exists) {
-    return {
-      success: false,
-      error: "You are not authorized to manage admin accounts.",
-    };
-  }
-  const caller = callerDoc.data();
-  if (
-    caller.status === "removed" ||
-    caller.status === "disabled"
-  ) {
-    return {
-      success: false,
-      error: "Only an active Super Admin can manage admin accounts.",
-    };
-  }
+  await requireActiveAdmin(req, "You are not authorized to manage admin accounts.");
   const validationResult = addAdminValidator(req.data || {});
   if (!validationResult.success) {
     return validationResult;
@@ -50,29 +29,7 @@ const manageAdmin = callableWrapper(async (req) => {
 // ======================================================
 
 const managePermission = callableWrapper(async (req) => {
-  if (!req.auth?.uid) {
-    return {
-      success: false,
-      error: "Authentication is required.",
-    };
-  }
-  const callerDoc = await db.collection("adminUsers").doc(req.auth.uid).get();
-  if (!callerDoc.exists) {
-    return {
-      success: false,
-      error: "You are not authorized to manage permissions.",
-    };
-  }
-  const caller = callerDoc.data();
-  if (
-    caller.status === "removed" ||
-    caller.status === "disabled"
-  ) {
-    return {
-      success: false,
-      error: "Your admin account is not active.",
-    };
-  }
+  await requireActiveAdmin(req, "You are not authorized to manage permissions.");
   const validationResult = addPermissionsValidator(req.data || {});
   if (!validationResult.success) {
     return validationResult;
@@ -83,7 +40,13 @@ const managePermission = callableWrapper(async (req) => {
 // ============================ NEW USER DOCUMENT CREATION =============================== //
 
 const addNewUser = callableWrapper(async (req) => {
-  const payload = req.data;
+  const payload = req.data || {};
+  if (!payload.uid || typeof payload.uid !== "string") {
+    throw new HttpsError("invalid-argument", "uid is required.");
+  }
+  if (payload.uid !== req.auth.uid) {
+    await requireActiveAdmin(req, "You can only create your own user document.");
+  }
   const ref = db.collection("users").doc(payload.uid);
   const userDoc = await ref.get();
   if (userDoc.exists) {

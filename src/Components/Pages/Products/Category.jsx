@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Upload, Search, Edit, Trash2, X, Image as ImageIcon } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, X, Image as ImageIcon } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { app, storage } from '../../Config/Firebase';
 import { useToast } from '../../Shared/hooks/ToastContext';
+import { useConfirm } from '../../Shared/ui/ConfirmDialog';
 
 export default function Category() {
     const { showToast } = useToast();
+    const confirm = useConfirm();
     const functions = useMemo(() => getFunctions(app, 'europe-west1'), []);
     const manageCategory = useMemo(() => httpsCallable(functions, 'manageCategory'), [functions]);
     const [categories, setCategories] = useState([]);
@@ -126,7 +128,12 @@ export default function Category() {
     };
 
     const handleDeleteCategory = async (category) => {
-        if (!window.confirm(`Are you sure you want to delete ${category.categoryName}?`)) return;
+        const ok = await confirm({
+            title: 'Delete Category',
+            message: `Are you sure you want to delete "${category.categoryName}"?`,
+            confirmLabel: 'Delete',
+        });
+        if (!ok) return;
         try {
             const response = await manageCategory({
                 action: 'delete',
@@ -155,9 +162,6 @@ export default function Category() {
                         Category Management
                     </h1>
                     <div className="flex flex-wrap gap-3">
-                        <button type="button" className="flex items-center gap-2 rounded-xl bg-white border border-tertiary/60 px-4 py-2.5 text-sm font-bold text-gray-900 shadow-sm hover:bg-slate-50">
-                            <Upload size={16} /> Bulk Upload
-                        </button>
                         <button type="button" onClick={openAddModal} className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white shadow-md hover:bg-secondary">
                             <Plus size={18} /> Add Category
                         </button>
@@ -185,8 +189,8 @@ export default function Category() {
                                 ) : (
                                     <div className="flex h-full items-center justify-center text-secondary/50"><ImageIcon size={32} /></div>
                                 )}
-                                <div className="absolute inset-0 bg-black/15 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                <div className="absolute inset-0 bg-black/10 sm:bg-black/15 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" />
+                                <div className="absolute top-3 right-3 flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-all">
                                     <button type="button" onClick={() => openEditModal(category)} aria-label={`Edit ${category.categoryName}`} className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-gray-900 shadow-lg hover:text-primary">
                                         <Edit size={16} />
                                     </button>

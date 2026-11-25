@@ -1,4 +1,5 @@
 import {callableWrapper} from "../../shared/callable.wrapper.js";
+import {requireActiveAdmin} from "../../shared/utils.js";
 import {
   addProductService,
   deleteProductService,
@@ -11,7 +12,7 @@ import {
 } from "./product.validation.js";
 
 const manageProduct = callableWrapper(async (req) => {
-  if (!req.auth) return {success: false, message: "User is not authenticated"};
+  await requireActiveAdmin(req);
 
   const action = req.data?.action || "add";
 

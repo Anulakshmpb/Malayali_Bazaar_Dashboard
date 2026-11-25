@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
     ArrowLeft,
@@ -9,111 +9,293 @@ import {
     MapPin,
     Clock,
     CreditCard,
-    DollarSign,
+    Euro,
     Package,
     CheckCircle2,
     Truck,
-    Eye,
-    Building2
+    Eye
 } from 'lucide-react';
+import {
+    collection,
+    doc,
+    limit,
+    onSnapshot,
+    orderBy,
+    query,
+    where
+} from 'firebase/firestore';
+import { db } from '../../Config/Firebase';
 import CommonTable from '../../Shared/Pages/CommonTable';
+import { formatCurrency, formatNumber } from '../../Shared/utils/formatters';
+
+const parseDateObj = (value) => {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    if (typeof value?.toDate === 'function') return value.toDate();
+    if (value?.seconds != null) return new Date(value.seconds * 1000);
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const normalizeStatus = (data = {}) => {
+    if (data.isBlocked === true || String(data.status || '').toLowerCase() === 'blocked') {
+        return 'Blocked';
+    }
+    if (data.isActive === false || String(data.status || '').toLowerCase() === 'inactive') {
+        return 'Inactive';
+    }
+    return 'Active';
+};
 
 export default function ViewUser() {
     const location = useLocation();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('details');
 
-    const passedCustomer = location.state?.customer;
+    const passedCustomer = location.state?.customer || null;
+    const queryUid = new URLSearchParams(location.search).get('uid');
+    const userId = queryUid || passedCustomer?.uid || passedCustomer?.id || null;
 
-    const customer = passedCustomer || {
-        id: 1,
-        name: 'Sarah Connor',
-        email: 'sarah.connor@example.com',
-        phone: '+49 151 2345678',
-        orders: 15,
-        status: 'Active',
-        joined: '12 Mar 2024',
-        totalSpent: '€1,450.00',
-        city: 'Berlin',
-        street: 'Friedrichstraße 43, Apt 4B',
-        postalCode: '10117',
-        state: 'Berlin',
-        country: 'Germany'
-    };
+    const [userDocData, setUserDocData] = useState(null);
+    const [ledgerData, setLedgerData] = useState(null);
+    const [orders, setOrders] = useState([]);
+    const [loadingOrders, setLoadingOrders] = useState(Boolean(userId));
 
-    // Mock 
-    const orderHistory = [
-        {
-            id: 'ORD-9821',
-            date: '10 Oct 2026',
-            time: '14:30',
-            items: '3 items (Espresso Beans, Filter Paper, Mug)',
-            total: '€124.50',
-            paymentMethod: 'Credit Card (**** 4242)',
-            status: 'Delivered',
-        },
-        {
-            id: 'ORD-9742',
-            date: '28 Sep 2026',
-            time: '09:15',
-            items: '1 item (Ceramic Mug Set 4-Pack)',
-            total: '€35.00',
-            paymentMethod: 'PayPal',
-            status: 'Delivered',
-        },
-        {
-            id: 'ORD-9610',
-            date: '14 Sep 2026',
-            time: '18:45',
-            items: '5 items (Barista Apron, Machine Cleaner, Syrups)',
-            total: '€382.00',
-            paymentMethod: 'Klarna Pay Later',
-            status: 'Delivered',
-        },
-        {
-            id: 'ORD-9504',
-            date: '22 Aug 2026',
-            time: '11:20',
-            items: '2 items (Matcha Powder 250g, Vanilla Syrup)',
-            total: '€48.00',
-            paymentMethod: 'Credit Card (**** 4242)',
-            status: 'Processing',
-        },
-        {
-            id: 'ORD-9390',
-            date: '05 Aug 2026',
-            time: '16:10',
-            items: '4 items (Coffee Grinder Pro, 12oz Cups, Sugar)',
-            total: '€215.50',
-            paymentMethod: 'Credit Card (**** 4242)',
-            status: 'Delivered',
-        },
-        {
-            id: 'ORD-9128',
-            date: '19 Jul 2026',
-            time: '10:05',
-            items: '2 items (Specialty Roast Blend 1kg)',
-            total: '€64.00',
-            paymentMethod: 'PayPal',
-            status: 'Delivered',
+    // Subscribe to live users/{userId} document
+    useEffect(() => {
+        if (!userId) return undefined;
+
+        const unsubscribe = onSnapshot(
+            doc(db, 'users', userId),
+            (docSnap) => {
+                if (docSnap.exists()) {
+                    setUserDocData({ id: docSnap.id, ...docSnap.data() });
+                }
+            },
+            (err) => {
+                console.warn('Customer profile subscription warning:', err?.message || err);
+            }
+        );
+
+        return unsubscribe;
+    }, [userId]);
+
+    // Subscribe to user_ledgers/{userId}
+    useEffect(() => {
+        if (!userId) return undefined;
+
+        const unsubscribe = onSnapshot(
+            doc(db, 'user_ledgers', userId),
+            (docSnap) => {
+                if (docSnap.exists()) {
+                    setLedgerData(docSnap.data());
+                }
+            },
+            () => {}
+        );
+
+        return unsubscribe;
+    }, [userId]);
+
+    // Subscribe to customer orders (bounded)
+    useEffect(() => {
+        if (!userId) {
+            setLoadingOrders(false);
+            return undefined;
         }
-    ];
 
-    // Status pill helper
+        setLoadingOrders(true);
+        let isMounted = true;
+        let primaryUserUnsub = null;
+        let fallbackUserUnsub = null;
+        let primaryCustUnsub = null;
+        let fallbackCustUnsub = null;
+        let ordersByUser = [];
+        let ordersByCustomer = [];
+
+        const mergeAndSet = () => {
+            if (!isMounted) return;
+            const mergedMap = new Map();
+            [...ordersByUser, ...ordersByCustomer].forEach((orderItem) => {
+                mergedMap.set(orderItem.docId, orderItem);
+            });
+            const list = Array.from(mergedMap.values());
+            list.sort((a, b) => {
+                const msA = parseDateObj(a.createdAt || a.orderDate)?.getTime() || 0;
+                const msB = parseDateObj(b.createdAt || b.orderDate)?.getTime() || 0;
+                return msB - msA;
+            });
+            setOrders(list);
+            setLoadingOrders(false);
+        };
+
+        const mapDocs = (snapshot) =>
+            snapshot.docs.map((docSnap) => ({
+                docId: docSnap.id,
+                ...docSnap.data(),
+            }));
+
+        try {
+            const orderedUserQuery = query(
+                collection(db, 'orders'),
+                where('userId', '==', userId),
+                orderBy('createdAt', 'desc'),
+                limit(50)
+            );
+
+            primaryUserUnsub = onSnapshot(
+                orderedUserQuery,
+                (snapshot) => {
+                    ordersByUser = mapDocs(snapshot);
+                    mergeAndSet();
+                },
+                (err) => {
+                    console.warn('Customer orders (userId) ordered query failed, falling back:', err?.message || err);
+                    if (typeof primaryUserUnsub === 'function') {
+                        primaryUserUnsub();
+                        primaryUserUnsub = null;
+                    }
+                    if (!isMounted) return;
+                    fallbackUserUnsub = onSnapshot(
+                        query(collection(db, 'orders'), where('userId', '==', userId), limit(50)),
+                        (snapshot) => {
+                            ordersByUser = mapDocs(snapshot);
+                            mergeAndSet();
+                        },
+                        (fallbackErr) => {
+                            console.error('Failed to load customer orders (userId):', fallbackErr);
+                            if (isMounted) setLoadingOrders(false);
+                        }
+                    );
+                }
+            );
+
+            const orderedCustomerQuery = query(
+                collection(db, 'orders'),
+                where('customerId', '==', userId),
+                orderBy('createdAt', 'desc'),
+                limit(50)
+            );
+
+            primaryCustUnsub = onSnapshot(
+                orderedCustomerQuery,
+                (snapshot) => {
+                    ordersByCustomer = mapDocs(snapshot);
+                    mergeAndSet();
+                },
+                (err) => {
+                    console.warn('Customer orders (customerId) ordered query failed, falling back:', err?.message || err);
+                    if (typeof primaryCustUnsub === 'function') {
+                        primaryCustUnsub();
+                        primaryCustUnsub = null;
+                    }
+                    if (!isMounted) return;
+                    fallbackCustUnsub = onSnapshot(
+                        query(collection(db, 'orders'), where('customerId', '==', userId), limit(50)),
+                        (snapshot) => {
+                            ordersByCustomer = mapDocs(snapshot);
+                            mergeAndSet();
+                        },
+                        (fallbackErr) => {
+                            console.warn('Customer orders (customerId) fallback warning:', fallbackErr?.message || fallbackErr);
+                        }
+                    );
+                }
+            );
+        } catch (error) {
+            console.error('Error loading customer orders:', error);
+            setLoadingOrders(false);
+        }
+
+        return () => {
+            isMounted = false;
+            if (typeof primaryUserUnsub === 'function') primaryUserUnsub();
+            if (typeof fallbackUserUnsub === 'function') fallbackUserUnsub();
+            if (typeof primaryCustUnsub === 'function') primaryCustUnsub();
+            if (typeof fallbackCustUnsub === 'function') fallbackCustUnsub();
+        };
+    }, [userId]);
+
+    const customer = useMemo(() => {
+        if (!userId) return null;
+        const base = userDocData || passedCustomer || {};
+        const latestOrder = orders[0] || {};
+        const address = base.deliveryAddress || base.address || latestOrder.deliveryAddress || null;
+
+        return {
+            id: userId,
+            name: base.name || base.displayName || base.fullName || latestOrder.customerName || 'Unnamed Customer',
+            email: base.email || latestOrder.customerEmail || '—',
+            phone: base.phone || base.phoneNumber || base.mobile || ledgerData?.mobile || latestOrder.customerPhone || '—',
+            status: userDocData ? normalizeStatus(userDocData) : (passedCustomer?.status || 'Active'),
+            address,
+        };
+    }, [userId, userDocData, passedCustomer, ledgerData, orders]);
+
+    const orderHistory = useMemo(() => {
+        return orders.map((order) => {
+            const d = parseDateObj(order.createdAt || order.orderDate);
+            const itemsArr = Array.isArray(order.items) ? order.items : [];
+            const itemSummary = itemsArr.length > 0
+                ? `${itemsArr.length} ${itemsArr.length === 1 ? 'item' : 'items'} (${itemsArr.slice(0, 3).map((i) => i.productName || i.name || 'Item').join(', ')})`
+                : `${order.totalItems || 0} items`;
+
+            return {
+                id: order.orderId || order.docId,
+                docId: order.docId,
+                date: d ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
+                time: d ? d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—',
+                items: itemSummary,
+                paymentMethod: order.paymentMethod || 'Cash on Delivery',
+                totalRaw: Number(order.totalAmount ?? order.total ?? 0),
+                total: formatCurrency(order.totalAmount ?? order.total ?? 0),
+                status: order.status || 'New',
+                rawOrder: { id: order.docId, orderDocId: order.docId, ...order },
+            };
+        });
+    }, [orders]);
+
+    const totalOrdersCount = Math.max(Number(ledgerData?.orders ?? passedCustomer?.orders ?? 0), orderHistory.length);
+    const totalSpendNum = Number(
+        ledgerData?.recievableAmount ??
+        orderHistory.reduce((sum, o) => sum + o.totalRaw, 0)
+    );
+    const avgOrderValue = totalOrdersCount > 0 ? totalSpendNum / totalOrdersCount : 0;
+
     const getStatusBadge = (status) => {
-        switch (status) {
-            case 'Delivered':
+        switch (String(status || '').toLowerCase()) {
+            case 'delivered':
+            case 'completed':
                 return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-            case 'Processing':
+            case 'processing':
                 return 'bg-amber-50 text-amber-700 border-amber-200';
-            case 'Shipped':
+            case 'dispatch':
+            case 'dispatched':
+            case 'shipped':
                 return 'bg-blue-50 text-blue-700 border-blue-200';
-            case 'Cancelled':
+            case 'cancelled':
+            case 'canceled':
                 return 'bg-rose-50 text-rose-700 border-rose-200';
             default:
                 return 'bg-slate-50 text-slate-700 border-slate-200';
         }
     };
+
+    if (!customer) {
+        return (
+            <div className="min-h-screen bg-white p-8 flex flex-col items-center justify-center text-center space-y-4">
+                <p className="text-lg font-bold text-gray-900">No customer selected</p>
+                <p className="text-sm text-secondary">Select a customer from the Customers list to view their profile and orders.</p>
+                <button
+                    type="button"
+                    onClick={() => navigate('/users')}
+                    className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-secondary transition-colors"
+                >
+                    Back to Customers
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-white pb-12 page-container">
@@ -144,7 +326,6 @@ export default function ViewUser() {
                                     {customer.status}
                                 </span>
                             </div>
-
                         </div>
                     </div>
 
@@ -161,55 +342,45 @@ export default function ViewUser() {
                 </div>
 
                 {/* Order Summary Stat Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 justify-center">
-                    {/* 1. Total Orders */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 justify-center">
                     <div className="p-5 rounded-2xl border border-tertiary/40 bg-white shadow-sm flex items-center gap-4">
                         <div className="h-12 w-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
                             <ShoppingBag size={24} />
                         </div>
                         <div>
                             <p className="text-xs font-bold text-secondary uppercase tracking-wider">Total Orders</p>
-                            <p className="text-2xl font-black text-gray-900 mt-0.5">
-                                {customer.orders || orderHistory.length}
-                            </p>
+                            <p className="text-2xl font-black text-gray-900 mt-0.5">{formatNumber(totalOrdersCount)}</p>
                             <p className="text-[11px] font-semibold text-blue-600 mt-0.5">Lifetime purchases</p>
                         </div>
                     </div>
 
-                    {/* 2. Total Spend */}
                     <div className="p-5 rounded-2xl border border-tertiary/40 bg-white shadow-sm flex items-center gap-4">
                         <div className="h-12 w-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                            <DollarSign size={24} />
+                            <Euro size={24} />
                         </div>
                         <div>
                             <p className="text-xs font-bold text-secondary uppercase tracking-wider">Total Spend</p>
-                            <p className="text-2xl font-black text-emerald-600 mt-0.5">
-                                {customer.totalSpent || '€1,450.00'}
-                            </p>
+                            <p className="text-2xl font-black text-emerald-600 mt-0.5">{formatCurrency(totalSpendNum)}</p>
                             <p className="text-[11px] font-semibold text-emerald-600 mt-0.5">Gross revenue</p>
                         </div>
                     </div>
 
-                    {/* 3. Average Order Value */}
                     <div className="p-5 rounded-2xl border border-tertiary/40 bg-white shadow-sm flex items-center gap-4">
                         <div className="h-12 w-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
                             <Package size={24} />
                         </div>
                         <div>
                             <p className="text-xs font-bold text-secondary uppercase tracking-wider">Avg. Order Value</p>
-                            <p className="text-2xl font-black text-gray-900 mt-0.5">€96.67</p>
+                            <p className="text-2xl font-black text-gray-900 mt-0.5">{formatCurrency(avgOrderValue)}</p>
                             <p className="text-[11px] font-semibold text-purple-600 mt-0.5">Per transaction</p>
                         </div>
                     </div>
-
                 </div>
 
                 {/* Main Tabbed Card */}
                 <div className="bg-white rounded-2xl shadow-sm border border-tertiary/40 overflow-hidden">
 
-                    {/* Tabs Header */}
                     <div className="flex border-b border-tertiary/40 bg-slate-50/60">
-                        {/* Tab 1: User details with address */}
                         <button
                             type="button"
                             onClick={() => setActiveTab('details')}
@@ -225,7 +396,6 @@ export default function ViewUser() {
                             )}
                         </button>
 
-                        {/* Tab 2: Purchase & Orders */}
                         <button
                             type="button"
                             onClick={() => setActiveTab('orders')}
@@ -242,11 +412,9 @@ export default function ViewUser() {
                         </button>
                     </div>
 
-                    {/* Tab 1 Content: User Details & Address */}
                     {activeTab === 'details' && (
                         <div className="p-6 sm:p-8 space-y-8 animate-in fade-in duration-200">
 
-                            {/* Personal & Account Information */}
                             <div>
                                 <h3 className="text-base font-bold text-gray-900 border-b border-tertiary/30 pb-3 flex items-center gap-2">
                                     <UserIcon size={18} className="text-primary" />
@@ -270,7 +438,6 @@ export default function ViewUser() {
                                         </p>
                                     </div>
 
-
                                     <div className="p-4 rounded-xl border border-tertiary/40 bg-slate-50/60">
                                         <p className="text-xs font-bold text-secondary/70 uppercase tracking-wider">Account Status</p>
                                         <div className="mt-1">
@@ -287,19 +454,16 @@ export default function ViewUser() {
                                 </div>
                             </div>
 
-                            {/* Address Information Section */}
                             <div>
                                 <h3 className="text-base font-bold text-gray-900 border-b border-tertiary/30 pb-3 flex items-center gap-2">
                                     <MapPin size={18} className="text-primary" />
-                                    <span>Saved Addresses</span>
+                                    <span>Latest Delivery Address</span>
                                 </h3>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-5">
-
-                                    {/* Shipping Address */}
-                                    <div className="p-5 rounded-2xl border border-tertiary/40 bg-white shadow-sm flex flex-col justify-between relative overflow-hidden">
+                                {customer.address ? (
+                                    <div className="mt-5 p-5 rounded-2xl border border-tertiary/40 bg-white shadow-sm flex flex-col justify-between relative overflow-hidden max-w-xl">
                                         <div className="absolute top-0 right-0 bg-primary/10 text-primary text-[10px] font-black uppercase px-3 py-1 rounded-bl-xl tracking-wider">
-                                            Default Shipping
+                                            Recent Order Address
                                         </div>
 
                                         <div className="space-y-3">
@@ -308,78 +472,47 @@ export default function ViewUser() {
                                                     <Truck size={18} />
                                                 </div>
                                                 <div>
-                                                    <h4 className="text-sm font-bold text-gray-900">Primary Delivery Address</h4>
-                                                    <p className="text-xs text-secondary/70">Used for courier & postal dispatch</p>
+                                                    <h4 className="text-sm font-bold text-gray-900">Delivery Address</h4>
+                                                    <p className="text-xs text-secondary/70">Derived from customer profile / latest order</p>
                                                 </div>
                                             </div>
 
                                             <div className="text-sm text-gray-800 space-y-1 pl-1 pt-2">
-                                                <p className="font-bold text-gray-900">{customer.name}</p>
-                                                <p className="text-secondary">{customer.street || 'Friedrichstraße 43, Apt 4B'}</p>
+                                                <p className="font-bold text-gray-900">{customer.address.fullName || customer.name}</p>
                                                 <p className="text-secondary">
-                                                    {customer.postalCode || '10117'} {customer.city || 'Berlin'}, {customer.state || 'Berlin'}
+                                                    {customer.address.addressLine || customer.address.street || customer.address.addressLine1 || customer.address.line1 || '—'}
                                                 </p>
-                                                <p className="text-secondary font-semibold">{customer.country || 'Germany'}</p>
+                                                <p className="text-secondary">
+                                                    {[customer.address.postalCode || customer.address.zip, customer.address.city, customer.address.state].filter(Boolean).join(', ') || '—'}
+                                                </p>
+                                                <p className="text-secondary font-semibold">{customer.address.country || 'Germany'}</p>
                                             </div>
                                         </div>
 
                                         <div className="mt-5 pt-3 border-t border-tertiary/20 flex items-center justify-between text-xs text-secondary">
                                             <span className="flex items-center gap-1 font-semibold text-emerald-600">
-                                                <CheckCircle2 size={13} /> Verified Postal Address
+                                                <CheckCircle2 size={13} /> Recorded on Order
                                             </span>
-                                            <span className="font-medium">Phone: {customer.phone}</span>
+                                            <span className="font-medium">Phone: {customer.address.phone || customer.phone}</span>
                                         </div>
                                     </div>
-
-                                    {/* Billing Address */}
-                                    <div className="p-5 rounded-2xl border border-tertiary/40 bg-white shadow-sm flex flex-col justify-between relative overflow-hidden">
-                                        <div className="absolute top-0 right-0 bg-slate-100 text-secondary text-[10px] font-black uppercase px-3 py-1 rounded-bl-xl tracking-wider">
-                                            Billing Address
-                                        </div>
-
-                                        <div className="space-y-3">
-                                            <div className="flex items-center gap-2">
-                                                <div className="h-9 w-9 rounded-xl bg-secondary/10 text-secondary flex items-center justify-center shrink-0">
-                                                    <Building2 size={18} />
-                                                </div>
-                                                <div>
-                                                    <h4 className="text-sm font-bold text-gray-900">Official Invoice Address</h4>
-                                                    <p className="text-xs text-secondary/70">Matched against invoice records</p>
-                                                </div>
-                                            </div>
-
-                                            <div className="text-sm text-gray-800 space-y-1 pl-1 pt-2">
-                                                <p className="font-bold text-gray-900">{customer.name}</p>
-                                                <p className="text-secondary">{customer.street || 'Friedrichstraße 43, Apt 4B'}</p>
-                                                <p className="text-secondary">
-                                                    {customer.postalCode || '10117'} {customer.city || 'Berlin'}, {customer.state || 'Berlin'}
-                                                </p>
-                                                <p className="text-secondary font-semibold">{customer.country || 'Germany'}</p>
-                                            </div>
-                                        </div>
-
-                                        <div className="mt-5 pt-3 border-t border-tertiary/20 flex items-center justify-between text-xs text-secondary">
-                                            <span className="flex items-center gap-1 font-semibold text-gray-700">
-                                                <CreditCard size={13} className="text-secondary" /> Payment: Visa •••• 4242
-                                            </span>
-                                            <span className="font-medium">VAT: Exempt</span>
-                                        </div>
+                                ) : (
+                                    <div className="mt-5 rounded-xl border border-dashed border-tertiary/60 bg-slate-50/50 p-6 text-sm text-secondary">
+                                        No delivery address recorded for this customer yet.
                                     </div>
-
-                                </div>
+                                )}
                             </div>
 
                         </div>
                     )}
 
-                    {/* Tab 2 Content: Purchase & Orders */}
                     {activeTab === 'orders' && (
                         <div className="p-6 sm:p-8 space-y-8 animate-in fade-in duration-200">
-                            {/* Order History Table Section */}
                             <div className="space-y-4">
                                 <CommonTable
                                     title="Order History"
-                                    subtitle={`Showing ${orderHistory.length} orders`}
+                                    subtitle={`Showing ${orderHistory.length} recent orders`}
+                                    loading={loadingOrders}
                                     columns={[
                                         { key: "id", header: "Order ID", sortable: true, cellClassName: "font-mono font-bold text-primary" },
                                         {
@@ -428,12 +561,14 @@ export default function ViewUser() {
                                     total={orderHistory.length}
                                     clientSide
                                     showRowNumbers={false}
-                                    rowKey="id"
+                                    rowKey="docId"
                                     searchPlaceholder="Search order history..."
-                                    actions={() => (
+                                    emptyMessage="No orders found"
+                                    emptyDescription="This customer has not placed any orders yet."
+                                    actions={(order) => (
                                         <button
                                             type="button"
-                                            onClick={() => navigate('/orders/view')}
+                                            onClick={() => navigate(`/orders/view/${encodeURIComponent(order.docId)}`, { state: { order: order.rawOrder, orderId: order.docId } })}
                                             className="inline-flex items-center gap-1.5 rounded-lg border border-tertiary/40 bg-slate-50 px-3 py-1.5 text-xs font-bold text-secondary shadow-sm transition-colors hover:bg-white hover:text-primary"
                                             title="View Full Order"
                                         >
@@ -443,7 +578,6 @@ export default function ViewUser() {
                                     )}
                                 />
                             </div>
-
                         </div>
                     )}
 

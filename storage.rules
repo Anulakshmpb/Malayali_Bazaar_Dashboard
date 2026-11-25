@@ -1,0 +1,58 @@
+rules_version = '2';
+
+// Cloud Storage Security Rules for malayali-bazaar
+// Note: Because this project stores adminUsers in the named "default" Firestore
+// database (and Storage rules only support cross-service Firestore lookups on
+// "(default)"), admin authorization uses Firebase Auth custom claims (`admin: true`).
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+
+    function isValidImageUpload() {
+      return request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType != null
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Storefront & Catalog image folders used by the dashboard
+    match /products/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidImageUpload();
+      allow delete: if isAdmin();
+    }
+
+    match /brands/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidImageUpload();
+      allow delete: if isAdmin();
+    }
+
+    match /categories/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidImageUpload();
+      allow delete: if isAdmin();
+    }
+
+    match /banners/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidImageUpload();
+      allow delete: if isAdmin();
+    }
+
+    match /footer/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidImageUpload();
+      allow delete: if isAdmin();
+    }
+
+    // Deny all other paths by default
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

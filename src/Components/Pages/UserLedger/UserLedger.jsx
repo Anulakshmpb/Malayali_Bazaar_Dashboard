@@ -14,24 +14,19 @@ import {
   Filter,
   CircleDollarSign,
 } from "lucide-react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, limit, onSnapshot, query } from "firebase/firestore";
 import { db } from "../../Config/Firebase";
 import CommonTable from "../../Shared/Pages/CommonTable";
+import { formatCurrency, formatNumber } from "../../Shared/utils/formatters";
 
 // --------------------------------------------------
 // FORMATTERS
 // --------------------------------------------------
 
-const fmt = (value) =>
-  `₹${Number(value || 0).toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+const fmt = (value) => formatCurrency(value);
 
 const fmtCompact = (value) =>
-  `₹${Number(value || 0).toLocaleString("en-IN", {
-    maximumFractionDigits: 0,
-  })}`;
+  formatCurrency(value, { maximumFractionDigits: 0 });
 
 const fmtDate = (value) => {
   if (!value) return "—";
@@ -40,7 +35,7 @@ const fmtDate = (value) => {
 
   if (Number.isNaN(date.getTime())) return "—";
 
-  return date.toLocaleDateString("en-IN", {
+  return date.toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -54,7 +49,7 @@ const fmtDateTime = (value) => {
 
   if (Number.isNaN(date.getTime())) return "—";
 
-  return date.toLocaleString("en-IN", {
+  return date.toLocaleString("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -73,13 +68,13 @@ function SummaryCard({
   subtitle,
   icon: Icon,
   iconStyle,
-  valueStyle = "text-main",
+  valueStyle = "text-gray-900",
 }) {
   return (
-    <div className="group min-w-0 rounded-2xl border border-border bg-card p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-5">
+    <div className="group min-w-0 rounded-2xl border border-tertiary/40 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-semibold text-muted sm:text-sm">
+          <p className="text-xs font-semibold text-slate-500 sm:text-sm">
             {title}
           </p>
 
@@ -89,7 +84,7 @@ function SummaryCard({
             {value}
           </h3>
 
-          <p className="mt-2 text-xs leading-5 text-muted">{subtitle}</p>
+          <p className="mt-2 text-xs leading-5 text-slate-500">{subtitle}</p>
         </div>
 
         <div
@@ -155,10 +150,10 @@ function ViewModal({ customer, onClose, onNavigate }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="customer-modal-title"
-        className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card shadow-2xl"
+        className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-tertiary/40 bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="sticky top-0 flex items-center justify-between border-b border-border bg-card px-5 py-5 sm:px-6">
+        <div className="sticky top-0 flex items-center justify-between border-b border-tertiary/30 bg-white px-5 py-5 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-lg font-bold text-primary">
               {(customer.name || "?").charAt(0).toUpperCase()}
@@ -167,11 +162,11 @@ function ViewModal({ customer, onClose, onNavigate }) {
             <div className="min-w-0">
               <h2
                 id="customer-modal-title"
-                className="truncate text-lg font-bold text-main"
+                className="truncate text-lg font-bold text-gray-900"
               >
                 {customer.name || "Customer Details"}
               </h2>
-              <p className="mt-1 text-sm text-muted">
+              <p className="mt-1 text-sm text-slate-500">
                 Customer ledger overview
               </p>
             </div>
@@ -181,21 +176,21 @@ function ViewModal({ customer, onClose, onNavigate }) {
             type="button"
             onClick={onClose}
             aria-label="Close customer details"
-            className="ml-3 rounded-xl p-2 text-muted transition hover:bg-primary/10 hover:text-main"
+            className="ml-3 rounded-xl p-2 text-slate-500 transition hover:bg-primary/10 hover:text-gray-900"
           >
             <X size={19} />
           </button>
         </div>
 
         <div className="grid grid-cols-2 gap-3 p-5 sm:p-6">
-          <div className="rounded-xl border border-border bg-primary/5 p-4">
-            <p className="text-xs font-medium text-muted">Orders</p>
-            <p className="mt-2 text-2xl font-bold text-main">
+          <div className="rounded-xl border border-tertiary/30 bg-primary/5 p-4">
+            <p className="text-xs font-medium text-slate-500">Orders</p>
+            <p className="mt-2 text-2xl font-bold text-gray-900">
               {customer.orders || 0}
             </p>
           </div>
 
-          <div className="rounded-xl border border-border bg-rose-50 p-4">
+          <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
             <p className="text-xs font-medium text-rose-600">
               Outstanding
             </p>
@@ -209,13 +204,13 @@ function ViewModal({ customer, onClose, onNavigate }) {
           {details.map((item) => (
             <div
               key={item.label}
-              className="flex items-start justify-between gap-4 border-b border-border py-3.5 last:border-0"
+              className="flex items-start justify-between gap-4 border-b border-slate-100 py-3.5 last:border-0"
             >
-              <span className="text-sm text-muted">{item.label}</span>
+              <span className="text-sm text-slate-500">{item.label}</span>
 
               <span
                 className={`max-w-[60%] break-words text-right text-sm font-semibold ${
-                  item.color || "text-main"
+                  item.color || "text-gray-900"
                 }`}
               >
                 {item.value}
@@ -238,7 +233,7 @@ function ViewModal({ customer, onClose, onNavigate }) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-border px-5 py-2 text-sm font-semibold text-main transition hover:bg-primary/5"
+            className="rounded-xl border border-tertiary/50 px-5 py-2 text-sm font-semibold text-gray-900 transition hover:bg-primary/5"
           >
             Close
           </button>
@@ -261,10 +256,10 @@ export default function UserLedger() {
   const [balanceFilter, setBalanceFilter] = useState("all");
   const [sortOrder, setSortOrder] = useState("recent");
 
-  // Fetch real customer ledger documents from /user_ledgers
+  // Fetch real customer ledger documents from /user_ledgers (bounded)
   useEffect(() => {
     const unsubscribe = onSnapshot(
-      collection(db, "user_ledgers"),
+      query(collection(db, "user_ledgers"), limit(200)),
       (snapshot) => {
         if (!snapshot.empty) {
           const list = snapshot.docs.map((docSnap) => {
@@ -374,7 +369,7 @@ export default function UserLedger() {
   };
 
   return (
-    <main className="min-h-screen bg-background p-4 text-main sm:p-6 lg:p-8">
+    <main className="min-h-screen bg-white p-4 text-gray-900 sm:p-6 lg:p-8">
       <div className="mx-auto w-full max-w-[1600px] space-y-6">
 
         {/* PAGE HEADER */}
@@ -393,10 +388,10 @@ export default function UserLedger() {
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 self-start rounded-xl border border-border bg-card px-3.5 py-2.5 sm:self-auto">
-            <CalendarDays size={16} className="text-muted" />
-            <span className="text-sm font-medium text-main">
-              {new Date().toLocaleDateString("en-IN", {
+          <div className="flex shrink-0 items-center gap-2 self-start rounded-xl border border-tertiary/40 bg-white px-3.5 py-2.5 shadow-sm sm:self-auto">
+            <CalendarDays size={16} className="text-slate-500" />
+            <span className="text-sm font-medium text-gray-900">
+              {new Date().toLocaleDateString("en-GB", {
                 day: "2-digit",
                 month: "short",
                 year: "numeric",
@@ -413,8 +408,8 @@ export default function UserLedger() {
         >
           <SummaryCard
             title="Total Customers"
-            value={ledger.length.toLocaleString("en-IN")}
-            subtitle={`${totals.orders.toLocaleString("en-IN")} total orders processed`}
+            value={formatNumber(ledger.length)}
+            subtitle={`${formatNumber(totals.orders)} total orders processed`}
             icon={Users}
             iconStyle="bg-primary/10 text-primary"
           />
@@ -447,15 +442,15 @@ export default function UserLedger() {
           />
         </section>
 
-        <section className="overflow-hidden rounded-2xl border border-border bg-card">
+        <section className="overflow-hidden rounded-2xl border border-tertiary/40 bg-white shadow-sm">
 
           {/* TABLE HEADER */}
 
-          <div className="border-b border-border p-4 sm:p-5">
+          <div className="border-b border-tertiary/30 p-4 sm:p-5">
             <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-base font-bold text-main">
+                  <h2 className="text-base font-bold text-gray-900">
                     Customer Transactions
                   </h2>
 
@@ -469,7 +464,7 @@ export default function UserLedger() {
                 <div className="relative min-w-0 sm:w-72">
                   <Search
                     size={17}
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted"
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
                   />
 
                   <input
@@ -478,7 +473,7 @@ export default function UserLedger() {
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder="Search customers..."
                     aria-label="Search customers"
-                    className="w-full rounded-xl border border-border bg-background py-2.5 pl-10 pr-9 text-sm text-main outline-none transition placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/10"
+                    className="w-full rounded-xl border border-tertiary/50 bg-slate-50 py-2.5 pl-10 pr-9 text-sm text-gray-900 outline-none transition placeholder:text-slate-400 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10"
                   />
 
                   {search && (
@@ -486,7 +481,7 @@ export default function UserLedger() {
                       type="button"
                       onClick={() => setSearch("")}
                       aria-label="Clear search"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-main"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-gray-900"
                     >
                       <X size={15} />
                     </button>
@@ -496,7 +491,7 @@ export default function UserLedger() {
                 <button
                   type="button"
                   onClick={resetFilters}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-border px-3.5 py-2.5 text-sm font-semibold text-muted transition hover:bg-primary/5 hover:text-main"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-tertiary/50 px-3.5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-primary/5 hover:text-gray-900"
                 >
                   <RefreshCw size={15} />
                   Reset
@@ -507,7 +502,7 @@ export default function UserLedger() {
             {/* FILTER CONTROLS */}
 
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="flex items-center gap-2 text-xs font-semibold text-muted">
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
                 <Filter size={15} />
                 Filters
               </div>
@@ -517,7 +512,7 @@ export default function UserLedger() {
                   value={balanceFilter}
                   onChange={(event) => setBalanceFilter(event.target.value)}
                   aria-label="Filter by payment status"
-                  className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-main outline-none focus:border-primary sm:w-48"
+                  className="w-full rounded-xl border border-tertiary/50 bg-slate-50 px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary focus:bg-white sm:w-48"
                 >
                   <option value="all">All customers</option>
                   <option value="due">Outstanding only</option>
@@ -528,7 +523,7 @@ export default function UserLedger() {
                   value={sortOrder}
                   onChange={(event) => setSortOrder(event.target.value)}
                   aria-label="Sort customers"
-                  className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-main outline-none focus:border-primary sm:w-52"
+                  className="w-full rounded-xl border border-tertiary/50 bg-slate-50 px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary focus:bg-white sm:w-52"
                 >
                   <option value="recent">Recently updated</option>
                   <option value="highestDue">Highest outstanding</option>
@@ -546,11 +541,11 @@ export default function UserLedger() {
                 <Search size={24} />
               </div>
 
-              <h3 className="mt-4 text-base font-bold text-main">
+              <h3 className="mt-4 text-base font-bold text-gray-900">
                 No customers found
               </h3>
 
-              <p className="mt-1 max-w-sm text-sm text-muted">
+              <p className="mt-1 max-w-sm text-sm text-slate-500">
                 Try another search term or change the selected filters.
               </p>
 
@@ -577,8 +572,8 @@ export default function UserLedger() {
                         {(customer.name || "?").charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-main">{customer.name || "Unnamed customer"}</p>
-                        <p className="mt-1 text-xs text-muted">{customer.uid || customer.id}</p>
+                        <p className="truncate text-sm font-semibold text-gray-900">{customer.name || "Unnamed customer"}</p>
+                        <p className="mt-1 text-xs text-slate-500">{customer.uid || customer.id}</p>
                       </div>
                     </div>
                   ),
@@ -625,7 +620,7 @@ export default function UserLedger() {
                   header: "Last Updated",
                   sortable: true,
                   render: (customer) => (
-                    <span className="flex items-center gap-2 text-xs text-muted">
+                    <span className="flex items-center gap-2 text-xs text-slate-500">
                       <CalendarDays size={14} />
                       {fmtDate(customer.updatedAt)}
                     </span>
@@ -647,7 +642,7 @@ export default function UserLedger() {
                     onClick={() => setViewCustomer(customer)}
                     title="Quick preview"
                     aria-label={`Quick preview for ${customer.name}`}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-muted transition hover:border-primary/30 hover:bg-primary/5 hover:text-main"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-tertiary/50 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-primary/30 hover:bg-primary/5 hover:text-gray-900"
                   >
                     <Eye size={14} />
                     Preview
@@ -670,16 +665,16 @@ export default function UserLedger() {
           {/* TABLE FOOTER */}
 
           {filtered.length > 0 && (
-            <div className="flex flex-col gap-2 border-t border-border bg-background/50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs text-muted">
+            <div className="flex flex-col gap-2 border-t border-tertiary/30 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-slate-500">
                 Showing{" "}
-                <span className="font-bold text-main">{filtered.length}</span>{" "}
+                <span className="font-bold text-gray-900">{filtered.length}</span>{" "}
                 of{" "}
-                <span className="font-bold text-main">{ledger.length}</span>{" "}
+                <span className="font-bold text-gray-900">{ledger.length}</span>{" "}
                 customers
               </p>
 
-              <div className="flex items-center gap-2 text-xs font-medium text-muted">
+              <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
                 <CircleDollarSign size={15} />
                 Outstanding in view:{" "}
                 <span className="font-bold text-rose-600">

@@ -3,6 +3,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { app, storage } from '../../Config/Firebase';
 import { useToast } from '../../Shared/hooks/ToastContext';
+import { useConfirm } from '../../Shared/ui/ConfirmDialog';
 import {
     Plus,
     Search,
@@ -11,13 +12,6 @@ import {
     X,
     ImagePlus
 } from 'lucide-react';
-
-const Cropper = () => (
-    <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-2 bg-slate-800">
-        <ImagePlus size={32} />
-        <span className="text-sm font-medium">Image Cropper Plugin Active</span>
-    </div>
-);
 
 const ASPECT_RATIO_PRESETS = [
     { label: 'Desktop (4.5:1)', value: 4.5 / 1 },
@@ -54,6 +48,7 @@ export default function Banner() {
         [functions]
     );
     const { showToast } = useToast();
+    const confirm = useConfirm();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingBannerId, setEditingBannerId] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
@@ -63,7 +58,6 @@ export default function Banner() {
     const [desktopImageFile, setDesktopImageFile] = useState(null);
 
     const [cropImageSrc, setCropImageSrc] = useState(null);
-    const [crop, setCrop] = useState({ x: 0, y: 0 });
     const [zoom, setZoom] = useState(1);
     const [aspect, setAspect] = useState(4.5 / 1);
 
@@ -103,6 +97,9 @@ export default function Banner() {
     }, [loadBanners]);
 
     const handleCloseModal = () => {
+        if (formData.desktop_img_url && formData.desktop_img_url.startsWith('blob:')) {
+            URL.revokeObjectURL(formData.desktop_img_url);
+        }
         setIsModalOpen(false);
         setEditingBannerId(null);
         setCropImageSrc(null);
@@ -121,29 +118,17 @@ export default function Banner() {
     const handleDesktopImageChange = (e) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
+            if (formData.desktop_img_url && formData.desktop_img_url.startsWith('blob:')) {
+                URL.revokeObjectURL(formData.desktop_img_url);
+            }
             setDesktopImageFile(file);
             setFormData(prev => ({ ...prev, desktop_img_url: URL.createObjectURL(file) }));
-        }
-    };
-
-    const handleMobileImageChange = (e) => {
-        if (e.target.files && e.target.files[0]) {
-            setFormData(prev => ({ ...prev, mobile_img_url: URL.createObjectURL(e.target.files[0]) }));
         }
     };
 
     const handleAdjustDesktopCrop = () => {
         setAspect(4.5 / 1);
         setCropImageSrc(formData.desktop_img_url);
-    };
-
-    const handleAdjustMobileCrop = () => {
-        setAspect(21 / 9);
-        setCropImageSrc(formData.mobile_img_url);
-    };
-
-    const onCropComplete = (croppedArea, croppedAreaPixels) => {
-        // Handle crop completion
     };
 
     const handleApplyCrop = () => {
@@ -201,7 +186,12 @@ export default function Banner() {
     };
 
     const handleDelete = async (banner) => {
-        if (!window.confirm(`Delete banner "${banner.title || 'Untitled'}"?`)) return;
+        const ok = await confirm({
+            title: 'Delete Banner',
+            message: `Delete banner "${banner.title || 'Untitled'}"?`,
+            confirmLabel: 'Delete',
+        });
+        if (!ok) return;
         try {
             const response = await manageBanner({
                 action: 'delete',
@@ -388,15 +378,12 @@ export default function Banner() {
                         <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto" style={{ opacity: isSaving ? 0.6 : 1, pointerEvents: isSaving ? 'none' : 'auto' }}>
                             {cropImageSrc ? (
                                 <div className="space-y-6">
-                                    <div className="relative w-full h-[228px] bg-slate-900 rounded-xl overflow-hidden border border-slate-200">
-                                        <Cropper
-                                            image={cropImageSrc}
-                                            crop={crop}
-                                            zoom={zoom}
-                                            aspect={aspect}
-                                            onCropChange={setCrop}
-                                            onZoomChange={setZoom}
-                                            onCropComplete={onCropComplete}
+                                    <div className="relative flex w-full h-[228px] items-center justify-center bg-slate-900 rounded-xl overflow-hidden border border-slate-200">
+                                        <img
+                                            src={cropImageSrc}
+                                            alt="Banner crop preview"
+                                            style={{ aspectRatio: String(aspect), transform: `scale(${zoom})` }}
+                                            className="max-h-full w-full object-cover transition-transform duration-150"
                                         />
                                     </div>
 
@@ -603,16 +590,16 @@ export default function Banner() {
                                                 type="tel"
                                                 name="whatsapp_number"
                                                 className="w-full rounded-lg border border-tertiary/60 bg-slate-50 px-4 py-2.5 text-sm font-medium text-gray-900 outline-none transition placeholder:text-secondary/50 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10 disabled:opacity-50"
-                                                placeholder="+91"
+                                                placeholder="+4915123456789"
                                                 value={formData.whatsapp_number}
-                                                maxLength={13}
+                                                maxLength={18}
                                                 disabled={formData.type !== 'whatsapp'}
                                                 onChange={(e) => {
-                                                    let val = e.target.value;
-                                                    if (!val.startsWith('+91')) val = '+91';
-                                                    let numberPart = val.substring(3).replace(/\D/g, '');
-                                                    if (numberPart.length > 10) numberPart = numberPart.substring(0, 10);
-                                                    handleChange({ target: { name: 'whatsapp_number', value: '+91' + numberPart, type: 'tel' } });
+                                                    const cleaned = e.target.value.replace(/[^\d+]/g, '');
+                                                    const normalized = cleaned.startsWith('+')
+                                                        ? `+${cleaned.slice(1).replace(/\+/g, '')}`
+                                                        : cleaned.replace(/\+/g, '');
+                                                    handleChange({ target: { name: 'whatsapp_number', value: normalized, type: 'tel' } });
                                                 }}
                                             />
                                         </div>

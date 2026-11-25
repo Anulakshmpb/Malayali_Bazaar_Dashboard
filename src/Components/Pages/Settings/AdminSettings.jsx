@@ -22,16 +22,10 @@ import {
 } from "firebase/functions";
 
 import { useToast } from "../../Shared/hooks/ToastContext";
+import { useConfirm } from "../../Shared/ui/ConfirmDialog";
 import { PROTECTED_ROUTES as systemRoutes } from "../../Routes/RoutesConfig";
 import { db, app } from "../../Config/Firebase";
 import CommonTable from "../../Shared/Pages/CommonTable";
-
-const normalizeRoutes = (routes = []) =>
-    routes.map((path) => {
-        if (path === "/users-ist") return "/users-list";
-        if (path === "/passenger-ist") return "/passenger-list";
-        return path;
-    });
 
 const getPermissionTitle = (permission) =>
     permission.permissionName ||
@@ -52,6 +46,7 @@ const getErrorMessage = (error) => {
 
 export default function AdminSettings() {
     const { showToast } = useToast();
+    const confirm = useConfirm();
 
     const [permissions, setPermissions] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -87,7 +82,6 @@ export default function AdminSettings() {
                         ...document.data(),
                     }))
                 );
-                console.log(permissions)
                 setLoading(false);
             },
             (error) => {
@@ -149,11 +143,9 @@ export default function AdminSettings() {
         setEditingPermission(permission);
         setPermissionName(getPermissionTitle(permission));
         setSelectedRoutes(
-            normalizeRoutes(
-                Array.isArray(permission.permissions)
-                    ? permission.permissions
-                    : []
-            )
+            Array.isArray(permission.permissions)
+                ? permission.permissions
+                : []
         );
         setAdminForm(true);
     };
@@ -200,7 +192,7 @@ export default function AdminSettings() {
         );
 
         const routes = [
-            ...new Set(normalizeRoutes(selectedRoutes)),
+            ...new Set(selectedRoutes),
         ].filter((path) => validPaths.has(path));
 
         if (routes.length === 0) {
@@ -282,9 +274,11 @@ export default function AdminSettings() {
     const handleDelete = async (permission) => {
         if (!permission?.id || saving) return;
 
-        const confirmed = window.confirm(
-            `Delete the role "${getPermissionTitle(permission)}"?`
-        );
+        const confirmed = await confirm({
+            title: "Delete Role",
+            message: `Delete the role "${getPermissionTitle(permission)}"?`,
+            confirmLabel: "Delete",
+        });
 
         if (!confirmed) return;
 
@@ -327,11 +321,9 @@ export default function AdminSettings() {
     };
 
     const getAccessLevel = (permission) => {
-        const allowed = normalizeRoutes(
-            Array.isArray(permission.permissions)
-                ? permission.permissions
-                : []
-        );
+        const allowed = Array.isArray(permission.permissions)
+            ? permission.permissions
+            : [];
 
         if (
             systemRoutes.length > 0 &&
@@ -346,11 +338,9 @@ export default function AdminSettings() {
     };
 
     const getModuleNames = (permission) => {
-        const allowed = normalizeRoutes(
-            Array.isArray(permission.permissions)
-                ? permission.permissions
-                : []
-        );
+        const allowed = Array.isArray(permission.permissions)
+            ? permission.permissions
+            : [];
 
         return systemRoutes
             .filter((route) => allowed.includes(route.path))

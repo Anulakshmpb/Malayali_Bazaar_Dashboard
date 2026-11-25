@@ -6,9 +6,10 @@ import {
     RefreshCw,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, limit, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../../Config/Firebase';
 import CommonTable from '../../Shared/Pages/CommonTable';
+import { escapeHtml, formatCurrency } from '../../Shared/utils/formatters';
 
 const getOrderDateObj = (value) => {
     if (!value) return null;
@@ -80,8 +81,10 @@ const getPaymentStatusClass = (status) => {
 };
 
 export default function Orders() {
+    const ORDER_BATCH = 200;
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [orderLimit, setOrderLimit] = useState(ORDER_BATCH);
     const [activeTab, setActiveTab] = useState('All');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
@@ -90,9 +93,12 @@ export default function Orders() {
 
     useEffect(() => {
         setLoading(true);
-        let unsubscribe;
+        let isMounted = true;
+        let primaryUnsub = null;
+        let fallbackUnsub = null;
 
         const handleSnapshot = (snapshot) => {
+            if (!isMounted) return;
             const list = snapshot.docs.map((docSnap) => ({
                 id: docSnap.id,
                 orderDocId: docSnap.id,
@@ -111,21 +117,25 @@ export default function Orders() {
         };
 
         try {
-            const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-            unsubscribe = onSnapshot(
+            const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(orderLimit));
+            primaryUnsub = onSnapshot(
                 q,
                 handleSnapshot,
                 (err) => {
-                    console.warn('Orders query with orderBy failed, falling back to base collection:', err);
-                    const fallbackUnsub = onSnapshot(
-                        collection(db, 'orders'),
+                    console.warn('Orders query with orderBy failed, falling back to bounded base collection:', err);
+                    if (typeof primaryUnsub === 'function') {
+                        primaryUnsub();
+                        primaryUnsub = null;
+                    }
+                    if (!isMounted) return;
+                    fallbackUnsub = onSnapshot(
+                        query(collection(db, 'orders'), limit(orderLimit)),
                         handleSnapshot,
                         (fallbackErr) => {
                             console.error('Failed to load orders:', fallbackErr);
-                            setLoading(false);
+                            if (isMounted) setLoading(false);
                         }
                     );
-                    unsubscribe = fallbackUnsub;
                 }
             );
         } catch (error) {
@@ -134,9 +144,11 @@ export default function Orders() {
         }
 
         return () => {
-            if (typeof unsubscribe === 'function') unsubscribe();
+            isMounted = false;
+            if (typeof primaryUnsub === 'function') primaryUnsub();
+            if (typeof fallbackUnsub === 'function') fallbackUnsub();
         };
-    }, [refreshKey]);
+    }, [refreshKey, orderLimit]);
 
     const tabCounts = useMemo(() => {
         const counts = {
@@ -226,26 +238,39 @@ export default function Orders() {
             Number(o.totalAmount ?? o.total ?? 0).toFixed(2),
         ]);
         const csvContent =
-            "data:text/csv;charset=utf-8," +
-            [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-        const encodedUri = encodeURI(csvContent);
+            "\uFEFF" +
+            [headers.join(","), ...rows.map((e) => e.join(","))].join("\r\n");
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
+        link.setAttribute("href", url);
         link.setAttribute("download", `orders_${new Date().toISOString().slice(0, 10)}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     };
 
     const handlePrintOrder = (order) => {
         const printWindow = window.open('', '_blank');
         if (!printWindow) return;
+        printWindow.opener = null;
+
+        const safeOrderId = escapeHtml(order.orderId || order.orderDocId || order.id);
+        const safeDate = escapeHtml(formatOrderDate(order.orderDate || order.createdAt));
+        const safeCustomer = escapeHtml(order.customerName || order.deliveryAddress?.fullName || '—');
+        const safePhone = escapeHtml(order.customerPhone || order.deliveryAddress?.phone || '—');
+        const safeAddress = order.deliveryAddress
+            ? escapeHtml(`${order.deliveryAddress.addressLine || ''}, ${order.deliveryAddress.postalCode || ''} ${order.deliveryAddress.city || ''}, ${order.deliveryAddress.country || ''}`)
+            : '—';
+        const safePayment = `${escapeHtml(order.paymentMethod || '—')} (${escapeHtml(order.paymentStatus || 'Pending')})`;
+
         const itemsHtml = (order.items || []).map(item => `
             <tr>
-                <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.productName || item.sku || 'Item'}</td>
-                <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.quantity || 1}</td>
-                <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">€${Number(item.price || 0).toFixed(2)}</td>
-                <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">€${Number(item.total || 0).toFixed(2)}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #ddd;">${escapeHtml(item.productName || item.sku || 'Item')}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${Number(item.quantity || 1)}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${escapeHtml(formatCurrency(item.price || 0))}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${escapeHtml(formatCurrency(item.total || 0))}</td>
             </tr>
         `).join('');
 
@@ -253,7 +278,7 @@ export default function Orders() {
             <!DOCTYPE html>
             <html>
                 <head>
-                    <title>Order Receipt - ${order.orderId || order.orderDocId || order.id}</title>
+                    <title>Order Receipt - ${safeOrderId}</title>
                     <style>
                         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 24px; color: #111; max-width: 650px; margin: 0 auto; }
                         h1 { margin-bottom: 4px; font-size: 22px; }
@@ -265,12 +290,12 @@ export default function Orders() {
                 </head>
                 <body>
                     <h1>Order Receipt</h1>
-                    <p><strong>Order ID:</strong> ${order.orderId || order.orderDocId || order.id}</p>
-                    <p><strong>Date:</strong> ${formatOrderDate(order.orderDate || order.createdAt)}</p>
-                    <p><strong>Customer:</strong> ${order.customerName || order.deliveryAddress?.fullName || '—'}</p>
-                    <p><strong>Phone:</strong> ${order.customerPhone || order.deliveryAddress?.phone || '—'}</p>
-                    <p><strong>Delivery Address:</strong> ${order.deliveryAddress ? `${order.deliveryAddress.addressLine || ''}, ${order.deliveryAddress.postalCode || ''} ${order.deliveryAddress.city || ''}, ${order.deliveryAddress.country || ''}` : '—'}</p>
-                    <p><strong>Payment Method:</strong> ${order.paymentMethod || '—'} (${order.paymentStatus || 'Pending'})</p>
+                    <p><strong>Order ID:</strong> ${safeOrderId}</p>
+                    <p><strong>Date:</strong> ${safeDate}</p>
+                    <p><strong>Customer:</strong> ${safeCustomer}</p>
+                    <p><strong>Phone:</strong> ${safePhone}</p>
+                    <p><strong>Delivery Address:</strong> ${safeAddress}</p>
+                    <p><strong>Payment Method:</strong> ${safePayment}</p>
                     <table>
                         <thead>
                             <tr>
@@ -286,20 +311,20 @@ export default function Orders() {
                         <tfoot>
                             <tr>
                                 <td colspan="3" style="padding: 8px; text-align: right;">Subtotal:</td>
-                                <td style="padding: 8px; text-align: right;">€${Number(order.subtotal || order.grossSubtotal || 0).toFixed(2)}</td>
+                                <td style="padding: 8px; text-align: right;">${escapeHtml(formatCurrency(order.subtotal || order.grossSubtotal || 0))}</td>
                             </tr>
                             <tr>
                                 <td colspan="3" style="padding: 8px; text-align: right;">Delivery Charge:</td>
-                                <td style="padding: 8px; text-align: right;">€${Number(order.deliveryCharge || order.shipping || 0).toFixed(2)}</td>
+                                <td style="padding: 8px; text-align: right;">${escapeHtml(formatCurrency(order.deliveryCharge || order.shipping || 0))}</td>
                             </tr>
                             ${Number(order.discount || 0) > 0 ? `
                             <tr>
                                 <td colspan="3" style="padding: 8px; text-align: right; color: #16a34a;">Discount:</td>
-                                <td style="padding: 8px; text-align: right; color: #16a34a;">-€${Number(order.discount).toFixed(2)}</td>
+                                <td style="padding: 8px; text-align: right; color: #16a34a;">-${escapeHtml(formatCurrency(order.discount))}</td>
                             </tr>` : ''}
                             <tr class="total-row">
                                 <td colspan="3" style="padding: 8px; text-align: right; border-top: 2px solid #333;">Total Amount:</td>
-                                <td style="padding: 8px; text-align: right; border-top: 2px solid #333;">€${Number(order.totalAmount ?? order.total ?? 0).toFixed(2)}</td>
+                                <td style="padding: 8px; text-align: right; border-top: 2px solid #333;">${escapeHtml(formatCurrency(order.totalAmount ?? order.total ?? 0))}</td>
                             </tr>
                         </tfoot>
                     </table>
@@ -388,14 +413,6 @@ export default function Orders() {
                     onClearFilters={handleClearFilters}
                     columns={[
                         {
-                            key: "sl",
-                            header: "Sl No.",
-                            sortable: true,
-                            render: (_, index) => (
-                                <span className="font-semibold text-gray-600">{index + 1}</span>
-                            ),
-                        },
-                        {
                             key: "orderId",
                             header: "Order ID",
                             sortable: true,
@@ -478,7 +495,7 @@ export default function Orders() {
                             sortable: true,
                             render: (order) => (
                                 <span className="font-black text-gray-900">
-                                    €{Number(order.totalAmount ?? order.total ?? 0).toFixed(2)}
+                                    {formatCurrency(order.totalAmount ?? order.total ?? 0)}
                                 </span>
                             ),
                         },
@@ -487,11 +504,16 @@ export default function Orders() {
                             header: "Paid Amount",
                             sortable: true,
                             render: (order) => {
+                                const totalAmt = Number(order.totalAmount ?? order.total ?? 0);
                                 const isPaid = String(order.paymentStatus || '').toLowerCase() === 'paid';
-                                const paidVal = isPaid ? Number(order.totalAmount ?? order.total ?? 0) : 0;
+                                const paidVal =
+                                    order.paidAmount !== undefined && order.paidAmount !== null
+                                        ? Number(order.paidAmount)
+                                        : (isPaid ? totalAmt : 0);
+                                const fullyPaid = isPaid || (totalAmt > 0 && paidVal >= totalAmt);
                                 return (
-                                    <span className={`font-semibold ${isPaid ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                        €{paidVal.toFixed(2)}
+                                    <span className={`font-semibold ${fullyPaid ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                        {formatCurrency(paidVal)}
                                     </span>
                                 );
                             },
@@ -501,7 +523,7 @@ export default function Orders() {
                     total={filteredOrders.length}
                     loading={loading}
                     clientSide
-                    showRowNumbers={false}
+                    showRowNumbers={true}
                     rowKey="id"
                     searchPlaceholder="Search by order ID, customer, phone, email..."
                     actions={(order) => (
@@ -510,10 +532,10 @@ export default function Orders() {
                                 type="button"
                                 className="rounded-lg p-2 text-blue-700 transition hover:bg-blue-100 hover:text-blue-900"
                                 title="View Order"
-                                onClick={() => navigate('/orders/view', {
+                                onClick={() => navigate(`/orders/view/${encodeURIComponent(order.orderDocId || order.id || order.orderId)}`, {
                                     state: {
                                         order,
-                                        orderId: order.orderId || order.orderDocId || order.id,
+                                        orderId: order.orderDocId || order.id || order.orderId,
                                     },
                                 })}
                             >
@@ -530,6 +552,18 @@ export default function Orders() {
                         </div>
                     )}
                 />
+
+                {orders.length >= orderLimit && (
+                    <div className="mt-6 flex justify-center">
+                        <button
+                            type="button"
+                            onClick={() => setOrderLimit((prev) => prev + ORDER_BATCH)}
+                            className="rounded-xl border border-tertiary/60 bg-white px-5 py-2.5 text-sm font-semibold text-gray-900 shadow-sm transition hover:bg-slate-50"
+                        >
+                            Load more orders ({orders.length} loaded)
+                        </button>
+                    </div>
+                )}
 
             </div>
         </div>

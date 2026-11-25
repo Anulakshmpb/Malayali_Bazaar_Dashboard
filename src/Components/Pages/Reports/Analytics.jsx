@@ -26,26 +26,18 @@ import {
 import { 
     doc, 
     collection, 
+    limit,
     onSnapshot, 
     query, 
     orderBy 
 } from "firebase/firestore";
 import { db } from "../../Config/Firebase";
+import { downloadCsv } from "../../Shared/utils/csv";
+import { formatCurrency, formatNumber } from "../../Shared/utils/formatters";
 
 // ── Helpers ───────────────────────────────────────────────────────
 const currency = (v) =>
-    new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(v || 0));
-
-function downloadCsv(rows, filename) {
-    const csv = rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = Object.assign(document.createElement("a"), { href: url, download: filename });
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-}
+    formatCurrency(v, { maximumFractionDigits: 0 });
 
 // ── Tooltip ───────────────────────────────────────────────────────
 const ChartTooltip = ({ active, payload, label }) => {
@@ -103,7 +95,7 @@ function AnalyticsChart({ title, subtitle, data, revColor, profColor }) {
                             <YAxis
                                 axisLine={false} tickLine={false}
                                 tick={{ fill: "#cbd5e1", fontSize: 11 }}
-                                tickFormatter={(v) => v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`}
+                                tickFormatter={(v) => v >= 1000 ? `€${Math.round(v / 1000)}k` : `€${v}`}
                                 width={54}
                             />
                             <Tooltip content={<ChartTooltip />} cursor={{ fill: "#f8fafc", radius: 6 }} />
@@ -149,10 +141,10 @@ export default function Analytics() {
         return () => unsubscribe();
     }, []);
 
-    // 2. Fetch daily & monthly time-series from /analytics_time_series
+    // 2. Fetch daily & monthly time-series from /analytics_time_series (bounded)
     useEffect(() => {
         const unsubscribe = onSnapshot(
-            collection(db, "analytics_time_series"),
+            query(collection(db, "analytics_time_series"), limit(60)),
             (snapshot) => {
                 if (!snapshot.empty) {
                     const daily = [];
@@ -202,11 +194,12 @@ export default function Analytics() {
         return () => unsubscribe();
     }, []);
 
-    // 3. Fetch product-wise sales analytics from /analytics_products
+    // 3. Fetch product-wise sales analytics from /analytics_products (bounded)
     useEffect(() => {
         const productsQuery = query(
             collection(db, "analytics_products"),
-            orderBy("revenue", "desc")
+            orderBy("revenue", "desc"),
+            limit(100)
         );
 
         const unsubscribe = onSnapshot(
@@ -263,7 +256,7 @@ export default function Analytics() {
             deliveryCharges: overviewData?.deliveryCharges || 0,
             discounts: overviewData?.discounts || 0,
             costOfGoods: totalCogs || overviewData?.costOfGoods || 0,
-            totalPaid: overviewData?.totalPaid || (periodRevenue || overviewData?.totalRevenue || 0),
+            totalPaid: overviewData?.totalPaid ?? 0,
             totalReceivables: overviewData?.totalReceivables || 0,
         };
     }, [visibleMonthly, productsData, overviewData]);
@@ -277,7 +270,7 @@ export default function Analytics() {
         downloadCsv([
             ["Malayali Bazaar - Analytics & Financial Report", period],
             [],
-            ["Executive Financial Summary", "Value (₹)"],
+            ["Executive Financial Summary", "Value (€)"],
             ["Total Sales Revenue", totals.revenue],
             ["Gross Subtotal", totals.grossSubtotal],
             ["Cost of Goods Sold (COGS)", totals.costOfGoods],
@@ -342,7 +335,7 @@ export default function Analytics() {
         },
         { 
             title: "Total Orders",   
-            value: Number(totals.orders).toLocaleString("en-IN"),      
+            value: formatNumber(totals.orders),      
             trend: trends.orderGrowth || "+0.0%",  
             isUp: !(trends.orderGrowth || "").startsWith("-"),  
             detail: "vs last period", 
@@ -352,7 +345,7 @@ export default function Analytics() {
         },
         { 
             title: "Units Sold",     
-            value: Number(totals.quantity).toLocaleString("en-IN"),    
+            value: formatNumber(totals.quantity),    
             trend: trends.unitsGrowth || "+0.0%",  
             isUp: !(trends.unitsGrowth || "").startsWith("-"), 
             detail: "vs last period", 
@@ -382,7 +375,7 @@ export default function Analytics() {
         {
             title: "Tax Collected",
             value: currency(totals.taxCollected),
-            description: "Standard GST collected",
+            description: "Standard VAT collected",
             icon: FaReceipt,
             color: "text-indigo-600",
             bg: "bg-indigo-50",
@@ -575,7 +568,7 @@ export default function Analytics() {
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-4 text-right font-medium text-slate-600">
-                                                    {Number(item.quantity).toLocaleString("en-IN")}
+                                                    {formatNumber(item.quantity)}
                                                 </td>
                                                 <td className="px-4 py-4 text-right font-bold text-slate-900">
                                                     {currency(item.revenue)}
@@ -617,7 +610,7 @@ export default function Analytics() {
                                 <tfoot className="border-t-2 border-slate-200 bg-slate-50">
                                     <tr>
                                         <td className="px-5 py-4 font-bold text-slate-900">Total</td>
-                                        <td className="px-4 py-4 text-right font-bold text-slate-900">{Number(totals.quantity).toLocaleString("en-IN")}</td>
+                                        <td className="px-4 py-4 text-right font-bold text-slate-900">{formatNumber(totals.quantity)}</td>
                                         <td className="px-4 py-4 text-right font-bold text-slate-900">{currency(totalProductRevenue)}</td>
                                         <td className="px-4 py-4 text-right font-bold text-rose-600">{currency(totals.costOfGoods)}</td>
                                         <td className="px-4 py-4 text-right font-bold text-emerald-600">{currency(totals.profit)}</td>

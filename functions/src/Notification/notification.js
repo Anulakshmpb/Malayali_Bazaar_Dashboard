@@ -1,12 +1,14 @@
 import Joi from "joi";
-import {FieldValue} from "firebase-admin/firestore";
+import {FieldPath, FieldValue} from "firebase-admin/firestore";
 import {getMessaging} from "firebase-admin/messaging";
 import {db} from "../../shared/config.js";
 import {callableWrapper} from "../../shared/callable.wrapper.js";
+import {requireActiveAdmin} from "../../shared/utils.js";
 import {logInfo} from "../../shared/logger.js";
 
 const TOKEN_BATCH_SIZE = 500;
 const FIRESTORE_BATCH_SIZE = 450;
+const USER_PAGE_SIZE = 450;
 const SUBSCRIPTION_BATCH_SIZE = 1000;
 const NEARBY_RADIUS_KM = 5;
 
@@ -233,6 +235,7 @@ const sendToTokens = async (
     tokens,
     data,
     notificationId,
+    tokenOwners = new Map(),
 ) => {
   const uniqueTokens = [...new Set(tokens)].filter(Boolean);
 
@@ -241,6 +244,7 @@ const sendToTokens = async (
       totalTokens: 0,
       successCount: 0,
       failureCount: 0,
+      removedInvalidTokens: 0,
       message: "No FCM tokens registered.",
     };
   }
@@ -249,6 +253,7 @@ const sendToTokens = async (
 
   let successCount = 0;
   let failureCount = 0;
+  const invalidByUser = new Map();
 
   for (
     let i = 0;
@@ -274,12 +279,36 @@ const sendToTokens = async (
 
     successCount += response.successCount;
     failureCount += response.failureCount;
+
+    if (Array.isArray(response.responses)) {
+      response.responses.forEach((result, index) => {
+        if (
+          !result.success &&
+          INVALID_TOKEN_CODES.includes(result.error?.code)
+        ) {
+          const badToken = batchTokens[index];
+          const ownerId = tokenOwners.get(badToken);
+          if (ownerId) {
+            const list = invalidByUser.get(ownerId) || [];
+            list.push(badToken);
+            invalidByUser.set(ownerId, list);
+          }
+        }
+      });
+    }
+  }
+
+  let removedInvalidTokens = 0;
+  for (const [ownerId, badTokens] of invalidByUser.entries()) {
+    await removeInvalidTokens(ownerId, badTokens);
+    removedInvalidTokens += badTokens.length;
   }
 
   return {
     totalTokens: uniqueTokens.length,
     successCount,
     failureCount,
+    removedInvalidTokens,
   };
 };
 
@@ -462,14 +491,7 @@ const getShopCoordinates = () => {
   };
 };
 
-const getAudienceUsers = async (audience) => {
-  const snapshot = await db.collection("users").get();
-
-  const users = snapshot.docs.map((document) => ({
-    id: document.id,
-    ...document.data(),
-  }));
-
+const filterUsersForAudience = (users, audience, shopCoordinates = null) => {
   if (audience === "all_users") {
     return users;
   }
@@ -499,7 +521,7 @@ const getAudienceUsers = async (audience) => {
   }
 
   if (audience === "under_5_km") {
-    const shopCoordinates = getShopCoordinates();
+    const center = shopCoordinates || getShopCoordinates();
 
     return users.filter((user) => {
       const customerCoordinates = getCoordinates(user);
@@ -508,7 +530,7 @@ const getAudienceUsers = async (audience) => {
 
       return (
         calculateDistanceKm(
-            shopCoordinates,
+            center,
             customerCoordinates,
         ) <= NEARBY_RADIUS_KM
       );
@@ -518,33 +540,61 @@ const getAudienceUsers = async (audience) => {
   return [];
 };
 
-const getAudienceTokens = (users, audience) => {
-  let allowedPlatform = null;
+const getAudienceSelectFields = (audience) => {
+  if (audience === "all_users") return [];
+  if (audience === "under_5_km") return ["location", "fcmToken"];
+  return ["fcmToken"];
+};
 
-  if (audience === "all_web_users") {
-    allowedPlatform = "web";
-  } else if (audience === "all_android_users") {
-    allowedPlatform = "android";
-  } else if (audience === "all_ios_users") {
-    allowedPlatform = "ios";
+const paginateUsersInBatches = async ({
+  selectFields = null,
+  pageSize = USER_PAGE_SIZE,
+  onBatch,
+}) => {
+  let lastDoc = null;
+  let totalScanned = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    let baseQuery = db.collection("users");
+
+    if (
+      Array.isArray(selectFields) &&
+      typeof baseQuery.select === "function"
+    ) {
+      baseQuery = baseQuery.select(...selectFields);
+    }
+
+    let pageQuery = baseQuery
+        .orderBy(FieldPath.documentId())
+        .limit(pageSize);
+
+    if (lastDoc) {
+      pageQuery = pageQuery.startAfter(lastDoc);
+    }
+
+    const snapshot = await pageQuery.get();
+    if (snapshot.empty) {
+      hasMore = false;
+      break;
+    }
+
+    totalScanned += snapshot.docs.length;
+    const usersBatch = snapshot.docs.map((document) => ({
+      id: document.id,
+      ...document.data(),
+    }));
+
+    await onBatch(usersBatch);
+
+    if (snapshot.docs.length < pageSize) {
+      hasMore = false;
+    } else {
+      lastDoc = snapshot.docs[snapshot.docs.length - 1];
+    }
   }
 
-  const tokens = [];
-
-  users.forEach((user) => {
-    const records = getTokenRecords(user);
-
-    records.forEach((record) => {
-      if (
-        !allowedPlatform ||
-                record.platform === allowedPlatform
-      ) {
-        tokens.push(record.token);
-      }
-    });
-  });
-
-  return [...new Set(tokens)];
+  return totalScanned;
 };
 
 const sendToTopic = async (
@@ -585,51 +635,86 @@ const sendToTopic = async (
 };
 
 const sendNearbyNotification = async (data) => {
-  const users = await getAudienceUsers("under_5_km");
-
+  const shopCoordinates = getShopCoordinates();
   const campaignId = db
       .collection("_notificationCampaigns")
       .doc().id;
 
-  const savedCount = await saveBroadcastNotifications(
-      users,
-      data,
-      campaignId,
-  );
+  let recipientCount = 0;
+  let savedCount = 0;
+  const tokens = [];
+  const tokenOwners = new Map();
 
-  const tokens = getAudienceTokens(
-      users,
-      "under_5_km",
-  );
+  await paginateUsersInBatches({
+    selectFields: getAudienceSelectFields("under_5_km"),
+    pageSize: FIRESTORE_BATCH_SIZE,
+    onBatch: async (batchUsers) => {
+      const matched = filterUsersForAudience(
+          batchUsers,
+          "under_5_km",
+          shopCoordinates,
+      );
+
+      if (!matched.length) return;
+
+      recipientCount += matched.length;
+      savedCount += await saveBroadcastNotifications(
+          matched,
+          data,
+          campaignId,
+      );
+
+      matched.forEach((user) => {
+        getTokenRecords(user).forEach((record) => {
+          tokens.push(record.token);
+          if (!tokenOwners.has(record.token)) {
+            tokenOwners.set(record.token, user.id);
+          }
+        });
+      });
+    },
+  });
 
   const delivery = await sendToTokens(
       tokens,
       data,
       campaignId,
+      tokenOwners,
   );
 
   return {
     success: true,
     message: "Nearby notification processed.",
     notificationId: campaignId,
-    recipientCount: users.length,
+    recipientCount,
     savedCount,
     delivery,
   };
 };
 
 const sendTopicNotification = async (data) => {
-  const users = await getAudienceUsers(data.audience);
-
   const campaignId = db
       .collection("_notificationCampaigns")
       .doc().id;
 
-  const savedCount = await saveBroadcastNotifications(
-      users,
-      data,
-      campaignId,
-  );
+  let recipientCount = 0;
+  let savedCount = 0;
+
+  await paginateUsersInBatches({
+    selectFields: getAudienceSelectFields(data.audience),
+    pageSize: FIRESTORE_BATCH_SIZE,
+    onBatch: async (batchUsers) => {
+      const matched = filterUsersForAudience(batchUsers, data.audience);
+      if (!matched.length) return;
+
+      recipientCount += matched.length;
+      savedCount += await saveBroadcastNotifications(
+          matched,
+          data,
+          campaignId,
+      );
+    },
+  });
 
   try {
     const delivery = await sendToTopic(
@@ -643,7 +728,7 @@ const sendTopicNotification = async (data) => {
       message: "Notification submitted to Firebase.",
       notificationId: campaignId,
       audience: data.audience,
-      recipientCount: users.length,
+      recipientCount,
       savedCount,
       delivery,
     };
@@ -657,7 +742,7 @@ const sendTopicNotification = async (data) => {
       message: "Notification history saved, but topic delivery failed.",
       notificationId: campaignId,
       audience: data.audience,
-      recipientCount: users.length,
+      recipientCount,
       savedCount,
       delivery: {
         pushSuccess: false,
@@ -698,44 +783,11 @@ const sendPushNotificationService = async (data) => {
   }
 };
 
-const verifyAdmin = async (uid) => {
-  const adminDoc = await db
-      .collection("adminUsers")
-      .doc(uid)
-      .get();
-
-  if (!adminDoc.exists) {
-    return {
-      success: false,
-      error: "You are not authorized to send notifications.",
-    };
-  }
-
-  const admin = adminDoc.data();
-
-  if (admin.status !== "active") {
-    return {
-      success: false,
-      error: "Your admin account is not active.",
-    };
-  }
-
-  return {success: true};
-};
-
 const sendPushNotification = callableWrapper(async (req) => {
-  if (!req.auth?.uid) {
-    return {
-      success: false,
-      error: "Authentication is required.",
-    };
-  }
-
-  const adminCheck = await verifyAdmin(req.auth.uid);
-
-  if (!adminCheck.success) {
-    return adminCheck;
-  }
+  await requireActiveAdmin(
+      req,
+      "You are not authorized to send notifications.",
+  );
 
   const validationResult = validatePushNotification(
       req.data || {},
@@ -845,4 +897,11 @@ const syncNotificationTopics = callableWrapper(async (req) => {
 export {
   sendPushNotification,
   syncNotificationTopics,
+  sendPushNotificationService,
+  sendNearbyNotification,
+  sendTopicNotification,
+  sendToTokens,
+  filterUsersForAudience,
+  paginateUsersInBatches,
+  removeInvalidTokens,
 };

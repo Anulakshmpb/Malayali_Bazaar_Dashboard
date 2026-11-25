@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
     Search,
     Plus,
-    Upload,
     Download,
     Tags,
     Layers,
@@ -14,14 +13,18 @@ import {
     CopyPlus
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, limit, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, db } from '../../Config/Firebase';
 import { useToast } from '../../Shared/hooks/ToastContext';
+import { useConfirm } from '../../Shared/ui/ConfirmDialog';
+import { downloadCsv } from '../../Shared/utils/csv';
+import { formatCurrency } from '../../Shared/utils/formatters';
 
 export default function Products() {
     const navigate = useNavigate();
     const { showToast } = useToast();
+    const confirm = useConfirm();
     const functions = useMemo(() => getFunctions(app, 'europe-west1'), []);
     const manageProductCallable = useMemo(
         () => httpsCallable(functions, 'manageProduct'),
@@ -39,31 +42,58 @@ export default function Products() {
     const [productTypesLoading, setProductTypesLoading] = useState(false);
     const [savingProductType, setSavingProductType] = useState(false);
     const [deletingProductTypeId, setDeletingProductTypeId] = useState(null);
+    const PRODUCT_BATCH = 200;
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [productLimit, setProductLimit] = useState(PRODUCT_BATCH);
     const [searchTerm, setSearchTerm] = useState('');
     const [updatingProductId, setUpdatingProductId] = useState(null);
     const [deletingProductId, setDeletingProductId] = useState(null);
 
     useEffect(() => {
-        const unsubscribe = onSnapshot(
-            collection(db, 'products'),
-            (snapshot) => {
-                setProducts(snapshot.docs.map(document => ({
-                    ...document.data(),
-                    id: document.id,
-                })));
-                setLoading(false);
-            },
-            (error) => {
-                console.error('Failed to load products:', error);
-                setLoading(false);
-                showToast('Unable to load products.', 'error');
+        let isMounted = true;
+        let primaryUnsub = null;
+        let fallbackUnsub = null;
+
+        const handleProductsSnapshot = (snapshot) => {
+            if (!isMounted) return;
+            setProducts(snapshot.docs.map((document) => ({
+                ...document.data(),
+                id: document.id,
+            })));
+            setLoading(false);
+        };
+
+        primaryUnsub = onSnapshot(
+            query(collection(db, 'products'), orderBy('createdAt', 'desc'), limit(productLimit)),
+            handleProductsSnapshot,
+            (err) => {
+                console.warn('Products ordered query failed, falling back:', err?.message || err);
+                if (typeof primaryUnsub === 'function') {
+                    primaryUnsub();
+                    primaryUnsub = null;
+                }
+                if (!isMounted) return;
+                fallbackUnsub = onSnapshot(
+                    query(collection(db, 'products'), limit(productLimit)),
+                    handleProductsSnapshot,
+                    (error) => {
+                        console.error('Failed to load products:', error);
+                        if (isMounted) {
+                            setLoading(false);
+                            showToast('Unable to load products.', 'error');
+                        }
+                    }
+                );
             }
         );
 
-        return unsubscribe;
-    }, [showToast]);
+        return () => {
+            isMounted = false;
+            if (typeof primaryUnsub === 'function') primaryUnsub();
+            if (typeof fallbackUnsub === 'function') fallbackUnsub();
+        };
+    }, [showToast, productLimit]);
 
     const loadProductTypes = async () => {
         setProductTypesLoading(true);
@@ -109,7 +139,12 @@ export default function Products() {
     };
 
     const handleDeleteProductType = async (type) => {
-        if (!window.confirm(`Are you sure you want to delete ${type.productTypeName}?`)) return;
+        const ok = await confirm({
+            title: 'Delete Product Type',
+            message: `Are you sure you want to delete "${type.productTypeName}"?`,
+            confirmLabel: 'Delete',
+        });
+        if (!ok) return;
         setDeletingProductTypeId(type.id);
         try {
             const response = await manageProductTypeCallable({
@@ -189,7 +224,12 @@ export default function Products() {
     };
 
     const handleDeleteProduct = async (id) => {
-        if (!window.confirm("Are you sure you want to delete this product?")) return;
+        const ok = await confirm({
+            title: 'Delete Product',
+            message: 'Are you sure you want to delete this product?',
+            confirmLabel: 'Delete',
+        });
+        if (!ok) return;
         setDeletingProductId(id);
         try {
             const response = await manageProductCallable({
@@ -286,13 +326,29 @@ export default function Products() {
 
                     {/* Primary Actions */}
                     <div className="flex flex-wrap gap-3 w-full xl:w-auto">
-                        <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-50 text-gray-900 border border-tertiary/50 rounded-xl text-sm font-semibold hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                downloadCsv({
+                                    filename: 'malayali-bazaar-products.csv',
+                                    headers: ['Name', 'SKU', 'Category', 'Brand', 'MRP (€)', 'Offer Price (€)', 'Stock', 'Visible'],
+                                    rows: filteredProducts.map((p) => [
+                                        p.productName || '',
+                                        p.productSKU || '',
+                                        p.category || '',
+                                        p.brand || '',
+                                        Number(p.mrp || 0).toFixed(2),
+                                        p.offerPrice ? Number(p.offerPrice).toFixed(2) : '',
+                                        Number(p.stock ?? 0),
+                                        p.productVisible === false ? 'Hidden' : 'Visible',
+                                    ]),
+                                });
+                                showToast(`Exported ${filteredProducts.length} products to CSV.`, 'success');
+                            }}
+                            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-50 text-gray-900 border border-tertiary/50 rounded-xl text-sm font-semibold hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        >
                             <Download size={16} className="text-secondary" />
                             <span>Export CSV</span>
-                        </button>
-                        <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-50 text-gray-900 border border-tertiary/50 rounded-xl text-sm font-semibold hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20">
-                            <Upload size={16} className="text-secondary" />
-                            <span>Bulk Upload</span>
                         </button>
                         <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-bold hover:bg-secondary transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-primary/40"
                             onClick={() => navigate('/products/add')}>
@@ -330,7 +386,7 @@ export default function Products() {
                                     </h3>
 
                                     <div className="mt-1 flex items-baseline justify-between">
-                                        <span className="text-sm font-extrabold text-gray-900">₹{Number(product.offerPrice || product.mrp || 0).toFixed(2)}</span>
+                                        <span className="text-sm font-extrabold text-gray-900">{formatCurrency(product.offerPrice || product.mrp || 0)}</span>
                                         <span className="text-[11px] font-medium text-gray-500">{product.quantity}{product.unit}</span>
                                     </div>
                                 </div>
@@ -389,6 +445,18 @@ export default function Products() {
                         </div>
                     ))}
                 </div>
+
+                {products.length >= productLimit && (
+                    <div className="mt-6 flex justify-center">
+                        <button
+                            type="button"
+                            onClick={() => setProductLimit((prev) => prev + PRODUCT_BATCH)}
+                            className="rounded-xl border border-tertiary/60 bg-white px-5 py-2.5 text-sm font-semibold text-gray-900 shadow-sm transition hover:bg-slate-50"
+                        >
+                            Load more products ({products.length} loaded)
+                        </button>
+                    </div>
+                )}
 
             </div>
             {/*Add Product type Modal*/}

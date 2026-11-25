@@ -3,9 +3,12 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { app } from "../../Config/Firebase";
-import CommonTable from "../../Shared/Pages/CommonTable";
+import { useToast } from "../../Shared/hooks/ToastContext";
+import { useConfirm } from "../../Shared/ui/ConfirmDialog";
 import { getAuth } from "firebase/auth";
 import {
+    ArrowUp,
+    ArrowDown,
     Plus,
     Edit,
     Trash2,
@@ -25,6 +28,8 @@ const initialForm = {
 
 export default function Section() {
     const navigate = useNavigate();
+    const { showToast } = useToast();
+    const confirm = useConfirm();
 
     const [sections, setSections] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -100,50 +105,41 @@ export default function Section() {
         setReordering(true);
 
         try {
-            // Persist the new order through your existing callable.
-            for (const section of updatedSections) {
-                const sectionId = section.sectionId || section.id;
-
-                if (!sectionId) {
-                    throw new Error(
-                        `Missing section ID for "${section.sectionName}".`
-                    );
-                }
-
-                const response = await manageSection({
-                    action: "update",
-                    fields: {
-                        sectionId,
-                        sectionName: section.sectionName,
+            const response = await manageSection({
+                action: "reorder",
+                fields: {
+                    orders: updatedSections.map((section) => ({
+                        id: section.sectionId || section.id,
                         order: section.order,
-                    },
-                });
+                    })),
+                },
+            });
 
-                if (!response.data?.success) {
-                    throw new Error(
-                        response.data?.message ||
-                        `Failed to update "${section.sectionName}".`
-                    );
-                }
+            if (!response.data?.success) {
+                throw new Error(
+                    response.data?.message || "Failed to save section order."
+                );
             }
 
             setNotice("Section order saved successfully.");
+            showToast("Section order saved successfully.", "success");
         } catch (err) {
             console.error("Failed to save section order:", err);
 
             // Restore the previous order, then reload the database state.
             setSections(previousSections);
-            setError(
+            const msg =
                 err.message ||
-                "Unable to save the new order. Please refresh and try again."
-            );
+                "Unable to save the new order. Please refresh and try again.";
+            setError(msg);
+            showToast(msg, "error");
 
             await fetchSections();
         } finally {
             setReordering(false);
         }
     };
-    const fetchSections = async () => {
+    const fetchSections = useCallback(async () => {
         setLoading(true);
         setError("");
         try {
@@ -162,10 +158,10 @@ export default function Section() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [manageSection]);
     useEffect(() => {
         fetchSections();
-    }, []);
+    }, [fetchSections]);
 
     const openAddModal = () => {
         setEditingSection(null);
@@ -285,9 +281,11 @@ export default function Section() {
             return;
         }
 
-        const confirmed = window.confirm(
-            `Delete "${section.sectionName}"? This will remove the section document and its linked product list.`
-        );
+        const confirmed = await confirm({
+            title: "Delete Section",
+            message: `Delete "${section.sectionName}"? This will remove the section document and its linked product list.`,
+            confirmLabel: "Delete",
+        });
 
         if (!confirmed) return;
 
@@ -323,13 +321,59 @@ export default function Section() {
         }
     };
 
+    const handleMoveSection = async (index, direction) => {
+        const targetIndex = index + direction;
+        if (reordering || targetIndex < 0 || targetIndex >= sections.length) {
+            return;
+        }
+        const previousSections = [...sections];
+        const reorderedSections = [...sections];
+        const [movedSection] = reorderedSections.splice(index, 1);
+        reorderedSections.splice(targetIndex, 0, movedSection);
+
+        const updatedSections = reorderedSections.map((section, idx) => ({
+            ...section,
+            order: idx + 1,
+        }));
+
+        setSections(updatedSections);
+        setError("");
+        setNotice("");
+        setReordering(true);
+
+        try {
+            const response = await manageSection({
+                action: "reorder",
+                fields: {
+                    orders: updatedSections.map((section) => ({
+                        id: section.sectionId || section.id,
+                        order: section.order,
+                    })),
+                },
+            });
+
+            if (!response.data?.success) {
+                throw new Error(
+                    response.data?.message || "Failed to update section order."
+                );
+            }
+
+            showToast("Section order updated.", "success");
+        } catch (err) {
+            setSections(previousSections);
+            showToast(err.message || "Failed to update section order.", "error");
+        } finally {
+            setReordering(false);
+        }
+    };
+
     // --------------------------------------------------
     // VIEW SECTION
     // --------------------------------------------------
     const handleView = (section) => {
         const sectionId = section.sectionId || section.id;
 
-        navigate("/section/view", {
+        navigate(`/section/view/${encodeURIComponent(sectionId)}`, {
             state: { sectionId },
         });
     };
@@ -528,6 +572,28 @@ export default function Section() {
                                         </div>
 
                                         <div className="flex shrink-0 items-center gap-1">
+                                            <button
+                                                type="button"
+                                                title="Move up"
+                                                aria-label={`Move ${section.sectionName} up`}
+                                                onClick={() => handleMoveSection(sections.indexOf(section), -1)}
+                                                disabled={reordering || sections.indexOf(section) === 0}
+                                                className="rounded-lg p-2 text-gray-600 transition hover:bg-slate-100 hover:text-primary disabled:opacity-30"
+                                            >
+                                                <ArrowUp size={15} />
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                title="Move down"
+                                                aria-label={`Move ${section.sectionName} down`}
+                                                onClick={() => handleMoveSection(sections.indexOf(section), 1)}
+                                                disabled={reordering || sections.indexOf(section) === sections.length - 1}
+                                                className="rounded-lg p-2 text-gray-600 transition hover:bg-slate-100 hover:text-primary disabled:opacity-30"
+                                            >
+                                                <ArrowDown size={15} />
+                                            </button>
+
                                             <button
                                                 type="button"
                                                 title="View section"

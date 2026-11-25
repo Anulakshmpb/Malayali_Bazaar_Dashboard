@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { collection, doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { collection, doc, getDoc, limit, onSnapshot, query } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { app, db, storage } from '../../Config/Firebase';
 import { useToast } from '../../Shared/hooks/ToastContext';
+import { formatCurrency } from '../../Shared/utils/formatters';
 import {
     X,
     Info,
@@ -124,7 +125,7 @@ export default function AddProduct() {
 
     useEffect(() => {
         const unsubscribe = onSnapshot(
-            collection(db, 'products'),
+            query(collection(db, 'products'), limit(200)),
             (snapshot) => {
                 setProductOptions(snapshot.docs.map(document => ({
                     ...document.data(),
@@ -1309,7 +1310,7 @@ export default function AddProduct() {
                                                         <img src={url} alt={`Gallery ${index + 1}`} className="h-full w-full object-cover transition group-hover:scale-105 duration-300" />
                                                         <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
                                                         <button type="button" onClick={() => removeGalleryImage(index)} aria-label={`Remove gallery image ${index + 1}`}
-                                                            className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-md bg-white/95 text-rose-500 shadow-sm transition hover:bg-rose-50 opacity-0 group-hover:opacity-100">
+                                                            className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-md bg-white/95 text-rose-500 shadow-sm transition hover:bg-rose-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100">
                                                             <Trash2 size={11} />
                                                         </button>
                                                     </div>
@@ -1319,7 +1320,7 @@ export default function AddProduct() {
                                                         <img src={url} alt={`Gallery ${existingGallery.length + index + 1}`} className="h-full w-full object-cover transition group-hover:scale-105 duration-300" />
                                                         <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
                                                         <button type="button" onClick={() => removeGalleryImage(existingGallery.length + index)} aria-label={`Remove gallery image ${existingGallery.length + index + 1}`}
-                                                            className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-md bg-white/95 text-rose-500 shadow-sm transition hover:bg-rose-50 opacity-0 group-hover:opacity-100">
+                                                            className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-md bg-white/95 text-rose-500 shadow-sm transition hover:bg-rose-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100">
                                                             <Trash2 size={11} />
                                                         </button>
                                                     </div>
@@ -1457,7 +1458,7 @@ export default function AddProduct() {
 
                             {/* Pricing */}
                             <div>
-                                <p className="mb-3 text-xs font-bold uppercase tracking-widest text-secondary/60">Pricing (₹)</p>
+                                <p className="mb-3 text-xs font-bold uppercase tracking-widest text-secondary/60">Pricing (€)</p>
                                 <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-4">
 
                                     {/* Distributor Price */}
@@ -1466,7 +1467,7 @@ export default function AddProduct() {
                                             Distributor Price <span className="text-rose-500">*</span>
                                         </label>
                                         <div className="relative">
-                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-secondary/70">₹</span>
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-secondary/70">€</span>
                                             <input
                                                 type="number" id="distributorPrice" name="distributorPrice"
                                                 value={pricing.distributorPrice}
@@ -1482,7 +1483,7 @@ export default function AddProduct() {
                                             MRP <span className="text-rose-500">*</span>
                                         </label>
                                         <div className="relative">
-                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-secondary/70">₹</span>
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-secondary/70">€</span>
                                             <input
                                                 type="number" id="mrp" name="mrp"
                                                 value={pricing.mrp}
@@ -1496,7 +1497,7 @@ export default function AddProduct() {
                                     <div className="min-w-0">
                                         <label htmlFor="offerPrice" className={labelClass}>Offer Price</label>
                                         <div className="relative">
-                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-secondary/70">₹</span>
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-secondary/70">€</span>
                                             <input
                                                 type="number" id="offerPrice" name="offerPrice"
                                                 value={pricing.offerPrice}
@@ -1574,7 +1575,7 @@ export default function AddProduct() {
 
                                     <div className="relative">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-secondary/70">
-                                            ₹
+                                            €
                                         </span>
 
                                         <input
@@ -1653,7 +1654,7 @@ export default function AddProduct() {
                                                         </span>
 
                                                         <span className="text-sm font-semibold text-gray-800">
-                                                            ₹{Number(selectedScheme.offerPrice || 0).toFixed(2)}
+                                                            {formatCurrency(selectedScheme.offerPrice || 0)}
                                                         </span>
                                                     </div>
 

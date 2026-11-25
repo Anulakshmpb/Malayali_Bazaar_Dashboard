@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, limit, query } from "firebase/firestore";
 import {
   Plus,
   Edit,
@@ -21,6 +21,8 @@ import {
 
 import { app, db } from "../../Config/Firebase";
 import CommonTable from "../../Shared/Pages/CommonTable";
+import { formatCurrency } from "../../Shared/utils/formatters";
+import { useConfirm } from "../../Shared/ui/ConfirmDialog";
 
 const functions = getFunctions(app, "europe-west1");
 const initialForm = {
@@ -84,6 +86,7 @@ const getErrorMessage = (error) =>
   error?.details?.message || error?.message || "Something went wrong. Please try again.";
 
 export default function PromoCode() {
+  const confirm = useConfirm();
   const managePromoCode = useMemo(
     () => httpsCallable(functions, "managePromoCode"),
     []
@@ -92,6 +95,7 @@ export default function PromoCode() {
   const [promos, setPromos] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
+  const [optionsLoaded, setOptionsLoaded] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
   const [productSearch, setProductSearch] = useState("");
@@ -130,12 +134,13 @@ export default function PromoCode() {
   }, []);
 
   useEffect(() => {
+    if (!isModalOpen || optionsLoaded) return undefined;
     let active = true;
     const loadOptions = async () => {
       try {
         const [usersSnap, productsSnap] = await Promise.all([
-          getDocs(collection(db, "users")),
-          getDocs(collection(db, "products")),
+          getDocs(query(collection(db, "users"), limit(200))),
+          getDocs(query(collection(db, "products"), limit(200))),
         ]);
         if (!active) return;
         const customerList = usersSnap.docs.map((docSnap) => {
@@ -160,6 +165,7 @@ export default function PromoCode() {
         setProducts(
           productList.sort((a, b) => a.productName.localeCompare(b.productName))
         );
+        setOptionsLoaded(true);
       } catch (err) {
         console.error("Failed to load users/products for promocode:", err);
       }
@@ -168,7 +174,7 @@ export default function PromoCode() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [isModalOpen, optionsLoaded]);
 
   const filteredCustomers = useMemo(() => {
     const q = customerSearch.trim().toLowerCase();
@@ -444,7 +450,12 @@ export default function PromoCode() {
       setError("Cannot delete this promo code: document ID is missing.");
       return;
     }
-    if (!window.confirm(`Delete promo code "${promo.code || promo.name}"? This cannot be undone.`)) {
+    const confirmed = await confirm({
+      title: "Delete Promo Code",
+      message: `Delete promo code "${promo.code || promo.name}"? This cannot be undone.`,
+      confirmLabel: "Delete",
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -622,7 +633,7 @@ export default function PromoCode() {
                 <span className="font-semibold text-gray-800">
                   {promo.discountType === "percentage"
                     ? `${promo.discountValue ?? 0}%`
-                    : `₹${Number(promo.discountValue || 0).toLocaleString("en-IN")}`}
+                    : formatCurrency(promo.discountValue || 0)}
                 </span>
               ),
             },
@@ -632,7 +643,7 @@ export default function PromoCode() {
               sortable: true,
               render: (promo) => (
                 <span className="text-gray-700">
-                  ₹{Number(promo.minimumOrderValue || 0).toLocaleString("en-IN")}
+                  {formatCurrency(promo.minimumOrderValue || 0)}
                 </span>
               ),
             },

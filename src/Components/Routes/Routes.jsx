@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -13,26 +13,29 @@ import AppBar from '../Shared/AppBar';
 import Login from '../Pages/Auth/Login';
 import AccessDenied from '../Shared/Pages/AccessDenied';
 import useFcmSubscription from '../Shared/hooks/UseFcmSubscription';
-import { PROTECTED_ROUTES } from './RoutesConfig';
+import { PROTECTED_ROUTES, ROUTE_ALIASES } from './RoutesConfig';
 
 const Layout = () => {
   const { user } = useUser();
   const {
-    subscribe,
-    isSubscribed,
-    loading,
-    error,
-    permission,
     foregroundMessage,
     setForegroundMessage,
-    serviceWorkerMessage,
   } = useFcmSubscription(user?.uid, "adminUsers");
 
   return (
     <div className="App min-h-screen bg-white">
       <AppBar>
-        <div className="mt-[100px] min-h-[calc(100vh-100px)] bg-white">
-          <Outlet />
+        <div className="pt-16 min-h-screen bg-slate-50/40">
+          <Suspense
+            fallback={
+              <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-secondary/70">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
+                <p className="text-sm font-medium">Loading view...</p>
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </div>
       </AppBar>
 
@@ -80,9 +83,10 @@ const ProtectedRoute = ({ user }) => {
 const PermissionRoute = ({ route }) => {
   const { hasPermission } = useUser();
   const PageComponent = route.element;
+  const permissionKey = route.permissionPath || route.path;
 
-  if (!hasPermission(route.path)) {
-    return <AccessDenied routeName={route.name} routePath={route.path} />;
+  if (!hasPermission(permissionKey)) {
+    return <AccessDenied routeName={route.name} routePath={permissionKey} />;
   }
 
   return <PageComponent />;
@@ -128,15 +132,20 @@ export default function AppRoutes() {
         {/* All authenticated pages with permission checks */}
         <Route element={<ProtectedRoute user={user} />}>
           <Route element={<Layout />}>
-            {PROTECTED_ROUTES.map((route) => {
-              return (
-                <Route
-                  key={route.path}
-                  path={route.path}
-                  element={<PermissionRoute route={route} />}
-                />
-              );
-            })}
+            {PROTECTED_ROUTES.map((route) => (
+              <Route
+                key={route.path}
+                path={route.path}
+                element={<PermissionRoute route={route} />}
+              />
+            ))}
+            {ROUTE_ALIASES.map((route) => (
+              <Route
+                key={route.path}
+                path={route.path}
+                element={<PermissionRoute route={route} />}
+              />
+            ))}
           </Route>
         </Route>
 

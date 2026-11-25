@@ -35,8 +35,12 @@ import {
   manageDeliveryPlace,
 } from "./src/Delivery/deliveryPlace.callable.js";
 import {
+  manageDeliverySettings,
+} from "./src/Delivery/deliverySettings.callable.js";
+import {
   placeOrder,
   validatePromoCode,
+  updateOrderStatus,
 } from "./src/Order/order.callable.js";
 setGlobalOptions({maxInstances: 10});
 
@@ -60,6 +64,8 @@ export {manageAdmin,
   syncNotificationTopics,
   recordCustomerPayment,
   manageDeliveryPlace,
+  manageDeliverySettings,
   placeOrder,
   validatePromoCode,
+  updateOrderStatus,
 };
